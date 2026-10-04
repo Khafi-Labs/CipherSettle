@@ -1,0 +1,19 @@
+# Pins the toolchain this workspace actually builds against. Every
+# `Cargo.toml` in this tree already has hand-written comments referencing
+# "rustc 1.75" and "the edition2024 wall" (see findings A6 and A3 in
+# CipherSettle_Audit_Remediation_Roadmap.md) -- this file makes that
+# constraint machine-enforced instead of just documented in prose, for
+# both local `rustup`-managed installs and CI (see
+# .github/workflows/ci.yml, which installs this exact version rather than
+# "stable" precisely so CI can't silently pass against a newer compiler
+# than what a real clone of this repo will build with).
+#
+# The A6 cutover to `blstrs` is done (`threshold_crypto` and its old
+# `ff`/`pairing` chain are removed), so that constraint no longer forces
+# this pin. It stays at 1.75.0 for now because the per-crate `zeroize` /
+# `postgres-protocol` / ed25519-dalek pins (A3) still assume it. Unpinning
+# is a separate, testable change: try a newer toolchain, drop those pins
+# one at a time, and run the full suite after each.
+[toolchain]
+channel = "1.75.0"
+components = ["clippy", "rustfmt"]

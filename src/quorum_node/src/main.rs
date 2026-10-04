@@ -1,0 +1,764 @@
+//! Standalone quorum node service: runs the DKG and serves derive requests
+//! over real mutual TLS between separate OS processes, per Phase 1 of the
+//! threshold-quorum roadmap ("a standalone, independently-testable
+//! 'quorum node' binary that does DKG and threshold derivation, with zero
+//! product logic in it yet").
+//!
+//! All the actual crypto lives in `quorum_core`; this binary is the
+//! network/transport wiring around it: TLS setup, connection handling,
+//! and translating `quorum_core::Message`s to and from the wire.
+//!
+//! Usage: `quorum_node <path-to-config.json>`
+//! (see `config.rs` for the config shape; `quorum_orchestrator` generates
+//! it for you rather than expecting it to be hand-written.)
+//!
+//! ## What's still open after this binary (see also quorum_core's docs)
+//! - No dispute-resolution round when a `Complaint` fires -- a node that
+//!   receives a bad share simply never reaches `is_ready()`, rather than
+//!   the quorum collectively excluding the cheating dealer and continuing
+//!   without it.
+//! - No resharing/rotation: a node's identity cert and DKG share are both
+//!   fixed for the process's whole lifetime.
+//! - Invoice-level access control (is THIS caller allowed THIS invoice)
+//!   is still `quorum_service`'s job (`ciphersettle_core::resolve_access`)
+//!   -- this binary has no concept of invoices, issuers, or banks. What
+//!   this binary DOES now check, after Phase 4 Stage A (fixing Findings
+//!   1.1/2.1): that a `DeriveRequest` actually carries a valid,
+//!   unexpired, not-previously-used authorization signed with the shared
+//!   `service_auth_key`.
+//! - ~~No bound on node-to-node wire message length...~~ Fixed (audit
+//!   finding A13): `handle_inbound` now reads through
+//!   `bounded_line_reader::BoundedLineReader` instead of
+//!   `BufReader::lines()`; see that module's doc for the cap and why it
+//!   was set where it was.
+
+mod bounded_line_reader;
+mod tls;
+
+use bounded_line_reader::BoundedLineReader;
+use ed25519_dalek::{SigningKey, VerifyingKey};
+use quorum_audit::AuditLog;
+use quorum_core::config::{b64_decode, NodeConfig};
+use quorum_core::{
+    derive_request_predates_restart, now_unix_ms, verify_derive_auth, DkgSession, Message,
+    MAX_DERIVE_AUTH_WINDOW_MS,
+};
+use quorum_core::{PublicKeySet, SecretKeyShare};
+use rand::thread_rng;
+use rustls::{Certificate, PrivateKey, ServerName};
+use std::collections::{BTreeMap, HashMap};
+use std::path::Path;
+use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
+use tokio_rustls::{TlsAcceptor, TlsConnector};
+
+enum NodeState {
+    Dkg(DkgSession),
+    Ready {
+        secret_share: SecretKeyShare,
+        group_pks: PublicKeySet,
+    },
+}
+
+struct Shared {
+    node_id: usize,
+    t: usize,
+    state: Mutex<NodeState>,
+    ready_file: String,
+    pubkey_file: String,
+    audit_log: Mutex<AuditLog>,
+    audit_log_file: String,
+    audit_keypair: SigningKey,
+    /// Every quorum member's audit-signing public key (including this
+    /// node's own), used to verify co-signatures on a replicated entry
+    /// before accepting it -- a node doesn't just trust "seq/hash line up"
+    /// for entries it didn't personally co-sign, it also checks that
+    /// enough of the claimed signers actually signed.
+    audit_pubkeys: BTreeMap<usize, VerifyingKey>,
+    /// Shared secret proving a `DeriveRequest` actually came from
+    /// `quorum_service`, not merely from anyone holding a pinned mTLS
+    /// cert (Phase 4 Finding 1.1). See `quorum_core::verify_derive_auth`.
+    service_auth_key: Vec<u8>,
+    /// Nonces already spent by a served `DeriveRequest`, mapped to the
+    /// unix-ms time after which they can be forgotten (their request's own
+    /// expiry) -- closes the replay gap Phase 4 Test D found (Finding
+    /// 2.1).
+    used_derive_nonces: Mutex<HashMap<[u8; 16], u64>>,
+    /// Wall-clock time this process started (T1-2 / T-3). The spent-nonce
+    /// set above is memory-only, so after a restart the node refuses any
+    /// request a previous process could have accepted -- see
+    /// `quorum_core::derive_request_predates_restart`.
+    process_start_unix_ms: u64,
+    /// T1-1: the single entry this node has co-signed (voted for) at the
+    /// log's next seq but not yet seen committed. See AppendAuditEntry.
+    pending_audit: Mutex<quorum_audit::VoteSlot>,
+}
+
+/// How long a vote blocks a *different* entry at the same seq. Trade-off
+/// (NEEDS_HUMAN_CRYPTO_REVIEW): long enough for a proposer to gather
+/// signatures and replicate; short enough that a proposer that crashed
+/// mid-round cannot wedge the log. After expiry a node may vote for a
+/// different entry at that seq, which weakens (but does not remove) the
+/// one-vote-per-seq guarantee. The pending vote is memory-only and is lost
+/// on restart.
+const PENDING_AUDIT_VOTE_TTL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Monotonic milliseconds since first call; feeds `quorum_audit::VoteSlot`
+/// (which takes an injected clock so its race semantics are unit-testable).
+fn mono_ms() -> u64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_millis() as u64
+}
+
+#[tokio::main]
+async fn main() {
+    let config_path = std::env::args()
+        .nth(1)
+        .expect("usage: quorum_node <config.json>");
+    let config: NodeConfig = {
+        let raw = std::fs::read_to_string(&config_path)
+            .unwrap_or_else(|e| panic!("failed to read config {config_path}: {e}"));
+        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("invalid config JSON: {e}"))
+    };
+
+    eprintln!(
+        "[node {}] starting: n={} t={} listen={}",
+        config.node_id, config.n, config.t, config.listen_addr
+    );
+
+    let own_cert = Certificate(b64_decode(&config.cert_der_b64));
+    let own_key = PrivateKey(b64_decode(&config.key_der_b64));
+    let client_cert_der = b64_decode(&config.client_cert_der_b64);
+
+    // Pinned allow-list: every other quorum member's cert, plus the
+    // designated derive-client's cert. This node's own cert is not in the
+    // list -- it never connects to itself over the network.
+    let mut allowed: Vec<Vec<u8>> = config
+        .peers
+        .iter()
+        .map(|p| b64_decode(&p.cert_der_b64))
+        .collect();
+    allowed.push(client_cert_der);
+    let verifier = tls::PinnedCertVerifier::new(allowed);
+
+    let server_config = rustls::ServerConfig::builder()
+        .with_safe_defaults()
+        .with_client_cert_verifier(verifier.clone())
+        .with_single_cert(vec![own_cert.clone()], own_key.clone())
+        .expect("bad own cert/key for server config");
+    let acceptor = TlsAcceptor::from(Arc::new(server_config));
+
+    let client_config = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_custom_certificate_verifier(verifier)
+        .with_client_auth_cert(vec![own_cert], own_key)
+        .expect("bad own cert/key for client config");
+    let connector = TlsConnector::from(Arc::new(client_config));
+
+    // --- DKG setup: become our own dealer, and immediately self-loop our
+    // own commitment and share so this node's session ends up needing
+    // exactly the same n commitments/n shares as every other node's,
+    // rather than a special-cased n-1. ---
+    let mut rng = thread_rng();
+    let (mut session, my_commitment) =
+        DkgSession::new(config.node_id, config.n, config.t, &mut rng);
+    session
+        .receive_commitment(config.node_id, my_commitment.clone())
+        .expect("a node's own commitment must have exactly t+1 coefficients");
+    let my_self_share = session.share_for(config.node_id);
+    session
+        .receive_share(config.node_id, my_self_share)
+        .expect("a node's share to itself must always verify");
+
+    // Pre-compute every peer's share now, before the session moves behind
+    // a shared lock -- outbound push tasks don't need session access at
+    // all, only these two already-computed values.
+    let outbound_shares: Vec<([u8; 32], usize, String)> = config
+        .peers
+        .iter()
+        .map(|p| (session.share_for(p.id), p.id, p.addr.clone()))
+        .collect();
+
+    let is_ready_already = session.is_ready(); // only true if n == 1, i.e. never in practice
+
+    let audit_keypair_bytes = b64_decode(&config.audit_keypair_b64);
+    let audit_keypair_seed: [u8; 32] = audit_keypair_bytes
+        .as_slice()
+        .try_into()
+        .unwrap_or_else(|_| panic!(
+            "invalid audit_keypair_b64: expected 32 bytes (ed25519-dalek 2.x SigningKey seed), got {}. \
+             If this config predates audit finding A4's migration, it was generated against \
+             ed25519-dalek 1.x's 64-byte Keypair::to_bytes() format and needs regenerating.",
+            audit_keypair_bytes.len()
+        ));
+    // Audit finding A4: SigningKey::from_bytes takes exactly a 32-byte
+    // seed (2.x), not the 64-byte secret||public blob 1.x's
+    // Keypair::from_bytes expected -- audit_keypair_seed is already
+    // 32 bytes post-migration (see the writer in quorum_orchestrator).
+    let audit_keypair = SigningKey::from_bytes(&audit_keypair_seed);
+    let mut audit_pubkeys: BTreeMap<usize, VerifyingKey> = config
+        .peers
+        .iter()
+        .map(|p| {
+            let bytes = b64_decode(&p.audit_pubkey_b64);
+            let array: [u8; 32] = bytes.as_slice().try_into().unwrap_or_else(|_| {
+                panic!(
+                    "invalid peer audit pubkey for node {}: expected 32 bytes, got {}",
+                    p.id,
+                    bytes.len()
+                )
+            });
+            (
+                p.id,
+                VerifyingKey::from_bytes(&array).expect("invalid peer audit pubkey in config"),
+            )
+        })
+        .collect();
+    audit_pubkeys.insert(config.node_id, audit_keypair.verifying_key());
+
+    let audit_log = load_or_init_audit_log(&config.audit_log_file);
+    let service_auth_key = b64_decode(&config.service_auth_key_b64);
+
+    let shared = Arc::new(Shared {
+        node_id: config.node_id,
+        t: config.t,
+        state: Mutex::new(NodeState::Dkg(session)),
+        ready_file: config.ready_file.clone(),
+        pubkey_file: config.pubkey_file.clone(),
+        audit_log: Mutex::new(audit_log),
+        audit_log_file: config.audit_log_file.clone(),
+        audit_keypair,
+        audit_pubkeys,
+        service_auth_key,
+        used_derive_nonces: Mutex::new(HashMap::new()),
+        process_start_unix_ms: now_unix_ms(),
+        pending_audit: Mutex::new(quorum_audit::VoteSlot::new()),
+    });
+    if is_ready_already {
+        finalize_if_ready(&shared).await;
+    }
+
+    // --- Inbound: accept peer/client connections and serve them. ---
+    let listener = TcpListener::bind(&config.listen_addr)
+        .await
+        .unwrap_or_else(|e| panic!("failed to bind {}: {e}", config.listen_addr));
+    {
+        let shared = shared.clone();
+        let acceptor = acceptor.clone();
+        tokio::spawn(async move {
+            loop {
+                let (stream, peer_addr) = match listener.accept().await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("[node {}] accept error: {e}", shared.node_id);
+                        continue;
+                    }
+                };
+                let acceptor = acceptor.clone();
+                let shared = shared.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_inbound(acceptor, stream, shared.clone()).await {
+                        eprintln!(
+                            "[node {} <- {peer_addr}] connection error: {e}",
+                            shared.node_id
+                        );
+                    }
+                });
+            }
+        });
+    }
+
+    // --- Outbound: push our commitment + this peer's private share to
+    // every other node. Retries briefly since peers may not have bound
+    // their listener yet (process startup order isn't synchronized). ---
+    for (share, peer_id, addr) in outbound_shares {
+        let connector = connector.clone();
+        let my_id = config.node_id;
+        let commitment = my_commitment.clone();
+        tokio::spawn(async move {
+            push_dkg_to_peer(connector, &addr, my_id, peer_id, commitment, share).await;
+        });
+    }
+
+    // Keep the process alive serving derive requests indefinitely.
+    // quorum_orchestrator kills the process directly (SIGKILL) to
+    // simulate a node outage; there's no graceful-shutdown RPC.
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    }
+}
+
+async fn push_dkg_to_peer(
+    connector: TlsConnector,
+    addr: &str,
+    my_id: usize,
+    peer_id: usize,
+    commitment: quorum_core::Commitment,
+    share: [u8; 32],
+) {
+    let server_name = ServerName::try_from("quorum-node").expect("static name is valid");
+    // Peers may start in any order; retry the connection briefly.
+    let stream = loop {
+        match TcpStream::connect(addr).await {
+            Ok(s) => break s,
+            Err(_) => {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                continue;
+            }
+        }
+    };
+    let mut tls = match connector.connect(server_name, stream).await {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("[node {my_id} -> {peer_id}] TLS connect failed: {e}");
+            return;
+        }
+    };
+    let commitment_msg = Message::DkgCommitment {
+        from: my_id,
+        commitment,
+    };
+    let share_msg = Message::DkgShare {
+        from: my_id,
+        to: peer_id,
+        share,
+    };
+    for msg in [commitment_msg, share_msg] {
+        let mut line = serde_json::to_vec(&msg).expect("Message always serializes");
+        line.push(b'\n');
+        if let Err(e) = tls.write_all(&line).await {
+            eprintln!("[node {my_id} -> {peer_id}] write failed: {e}");
+            return;
+        }
+    }
+    let _ = tls.shutdown().await;
+    eprintln!("[node {my_id} -> {peer_id}] sent commitment + share");
+}
+
+async fn handle_inbound(
+    acceptor: TlsAcceptor,
+    stream: TcpStream,
+    shared: Arc<Shared>,
+) -> std::io::Result<()> {
+    let tls = acceptor.accept(stream).await?;
+    let (read_half, mut write_half) = tokio::io::split(tls);
+    // Audit finding A13: was `BufReader::new(read_half).lines()`, which
+    // has no maximum line length. See `bounded_line_reader`'s module doc.
+    let mut lines = BoundedLineReader::new(read_half);
+    while let Some(line) = lines.next_line().await? {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let msg: Message = match serde_json::from_str(&line) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("[node {}] bad message, ignoring: {e}", shared.node_id);
+                continue;
+            }
+        };
+        if let Some(response) = handle_message(&shared, msg).await {
+            let mut out = serde_json::to_vec(&response).expect("Message always serializes");
+            out.push(b'\n');
+            write_half.write_all(&out).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Applies one inbound message to node state, returning a response message
+/// to write back on the same connection, if any (only derive requests get
+/// a response; DKG pushes are one-way).
+async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
+    match msg {
+        Message::DkgCommitment { from, commitment } => {
+            let mut state = shared.state.lock().await;
+            if let NodeState::Dkg(session) = &mut *state {
+                // C-1: a dealer whose commitment has the wrong degree (or an
+                // out-of-range id) is recorded as a complaint; this node then
+                // never reaches is_ready(), same as for a bad share.
+                if let Err(c) = session.receive_commitment(from, commitment) {
+                    eprintln!(
+                        "[node {}] rejected commitment from dealer {}: {}",
+                        shared.node_id, c.accused_dealer, c.reason
+                    );
+                }
+            }
+            drop(state);
+            finalize_if_ready(shared).await;
+            None
+        }
+        Message::DkgShare { from, to, share } => {
+            if to != shared.node_id {
+                eprintln!(
+                    "[node {}] received a share addressed to node {to}, ignoring (routing bug or malicious relay)",
+                    shared.node_id
+                );
+                return None;
+            }
+            let mut state = shared.state.lock().await;
+            if let NodeState::Dkg(session) = &mut *state {
+                if let Err(complaint) = session.receive_share(from, share) {
+                    eprintln!(
+                        "[node {}] COMPLAINT against dealer {}: {}",
+                        shared.node_id, complaint.accused_dealer, complaint.reason
+                    );
+                }
+            }
+            drop(state);
+            finalize_if_ready(shared).await;
+            None
+        }
+        Message::DkgComplaint {
+            from,
+            against,
+            reason,
+        } => {
+            eprintln!(
+                "[node {}] peer {from} reports a complaint against dealer {against}: {reason}",
+                shared.node_id
+            );
+            None
+        }
+        Message::DkgReady { from } => {
+            eprintln!("[node {}] peer {from} reports DKG ready", shared.node_id);
+            None
+        }
+        Message::DeriveRequest {
+            identity,
+            expires_at_unix_ms,
+            nonce,
+            mac,
+            transport_public_key,
+        } => {
+            let now = now_unix_ms();
+            if expires_at_unix_ms > now.saturating_add(MAX_DERIVE_AUTH_WINDOW_MS) {
+                return Some(Message::DeriveReject {
+                    from: shared.node_id,
+                    reason: format!(
+                        "requested authorization window exceeds the {MAX_DERIVE_AUTH_WINDOW_MS}ms maximum this node will accept"
+                    ),
+                });
+            }
+            if now > expires_at_unix_ms {
+                return Some(Message::DeriveReject {
+                    from: shared.node_id,
+                    reason: "derive authorization has expired".to_string(),
+                });
+            }
+            if !verify_derive_auth(
+                &shared.service_auth_key,
+                &identity,
+                expires_at_unix_ms,
+                &nonce,
+                &transport_public_key,
+                &mac,
+            ) {
+                eprintln!(
+                    "[node {}] REJECTED derive request for {identity:?}: invalid authorization MAC \
+                     (not from quorum_service, or the request was tampered with)",
+                    shared.node_id
+                );
+                return Some(Message::DeriveReject {
+                    from: shared.node_id,
+                    reason: "invalid derive authorization".to_string(),
+                });
+            }
+            // T1-2 / T-3: the nonce set below is memory-only. Refuse anything
+            // a previous incarnation of this process could have accepted, so
+            // a request captured before a restart cannot be replayed after it.
+            if derive_request_predates_restart(shared.process_start_unix_ms, expires_at_unix_ms) {
+                eprintln!(
+                    "[node {}] REJECTED derive request for {identity:?}: predates this process's start guard \
+                     (restart-replay protection)",
+                    shared.node_id
+                );
+                return Some(Message::DeriveReject {
+                    from: shared.node_id,
+                    reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request".to_string(),
+                });
+            }
+            {
+                let mut used = shared.used_derive_nonces.lock().await;
+                used.retain(|_, &mut exp| exp > now);
+                if used.contains_key(&nonce) {
+                    eprintln!(
+                        "[node {}] REJECTED derive request for {identity:?}: nonce already used (replay)",
+                        shared.node_id
+                    );
+                    return Some(Message::DeriveReject {
+                        from: shared.node_id,
+                        reason: "this derive request has already been served (replay detected)"
+                            .to_string(),
+                    });
+                }
+                used.insert(nonce, expires_at_unix_ms);
+            }
+
+            let state = shared.state.lock().await;
+            match &*state {
+                NodeState::Ready {
+                    secret_share,
+                    group_pks,
+                } => {
+                    let partial = quorum_core::sign_partial(secret_share, &identity);
+                    // Belt-and-suspenders: verify our own freshly-signed
+                    // partial before ever sealing and sending it. This
+                    // check existed on the client side already; keeping
+                    // it here too means a node never seals and ships a
+                    // partial it wouldn't itself trust.
+                    debug_assert!(quorum_core::verify_partial(
+                        group_pks,
+                        shared.node_id,
+                        &identity,
+                        &partial
+                    ));
+                    // Finding 2.3 fix: seal the partial under the
+                    // caller-supplied transport public key rather than
+                    // returning it in the clear. Only the true end
+                    // caller, holding the matching TransportSecretKey,
+                    // can ever recover a usable share from this --
+                    // quorum_service, or anyone else relaying this
+                    // response, sees only ciphertext. Sealing our own
+                    // genuine, already-verified share cannot fail (the
+                    // only failure mode in quorum_vetseal::encrypt_share
+                    // is a malformed point, and `partial` was just
+                    // produced by our own BLS signing code).
+                    //
+                    // Now also attaches a NIZK that the ciphertext encrypts
+                    // THIS node's genuine partial (CRYPTO-004), so the
+                    // verifier can reject a bad share
+                    // before combining. An encoding failure is rejected
+                    // rather than panicking the node.
+                    match quorum_core::seal_partial_with_proof(
+                        secret_share,
+                        &identity,
+                        &transport_public_key,
+                        &mut thread_rng(),
+                    ) {
+                        Ok((sealed_share, proof)) => Some(Message::DerivePartial {
+                            from: shared.node_id,
+                            sealed_share,
+                            proof,
+                        }),
+                        Err(e) => {
+                            eprintln!(
+                                "[node {}] failed to seal partial with proof: {e}",
+                                shared.node_id
+                            );
+                            Some(Message::DeriveReject {
+                                from: shared.node_id,
+                                reason: "internal error sealing partial".to_string(),
+                            })
+                        }
+                    }
+                }
+                NodeState::Dkg(_) => Some(Message::DeriveReject {
+                    from: shared.node_id,
+                    reason: "DKG has not finalized on this node yet".to_string(),
+                }),
+            }
+        }
+        Message::DerivePartial { .. } | Message::DeriveReject { .. } => {
+            // Only a client should ever receive these; a node receiving one
+            // means it was addressed as if it were a client. Ignore.
+            None
+        }
+
+        // ---- Phase 2: audit log ----
+        Message::AppendAuditEntry { entry } => {
+            if !entry.verify_hash() {
+                return Some(Message::AuditAppendRejected {
+                    node_id: shared.node_id,
+                    reason: "proposed entry's hash does not match its own content".to_string(),
+                });
+            }
+            let seq = entry.seq;
+            // Two-phase (T1-1 / TASK-011): casting a vote does NOT append. The
+            // entry enters the log only via ReplicateAuditEntry with > t valid
+            // co-signatures, so a proposer that fails to reach quorum can
+            // never leave an uncommitted fork in any node's log.
+            let log = shared.audit_log.lock().await;
+            if let Err(reason) = log.check_extends(&entry) {
+                eprintln!(
+                    "[node {}] refused audit append at seq {seq}: {reason}",
+                    shared.node_id
+                );
+                return Some(Message::AuditAppendRejected {
+                    node_id: shared.node_id,
+                    reason,
+                });
+            }
+            let mut pending = shared.pending_audit.lock().await;
+            if let Err(reason) = pending.try_vote(
+                seq,
+                entry.entry_hash,
+                mono_ms(),
+                PENDING_AUDIT_VOTE_TTL.as_millis() as u64,
+            ) {
+                eprintln!(
+                    "[node {}] refused audit append at seq {seq}: {reason}",
+                    shared.node_id
+                );
+                return Some(Message::AuditAppendRejected {
+                    node_id: shared.node_id,
+                    reason,
+                });
+            }
+            let sig = quorum_audit::sign_entry_hash(&shared.audit_keypair, &entry.entry_hash);
+            eprintln!(
+                "[node {}] co-signed (pending) audit entry seq {seq}.",
+                shared.node_id
+            );
+            Some(Message::AuditEntrySigned {
+                node_id: shared.node_id,
+                signature: sig,
+            })
+        }
+        Message::AuditEntrySigned { .. } | Message::AuditAppendRejected { .. } => {
+            // Only the proposer (client/coordinator) should receive these.
+            None
+        }
+        Message::ReplicateAuditEntry { entry } => {
+            let mut entry = entry;
+            // Which attached signatures actually verify over THIS entry's hash.
+            // Only these may ever be stored (review finding R-1: previously every
+            // attached signature was merged/persisted once the count gate passed,
+            // so a peer could overwrite a stored valid co-signature with garbage).
+            let valid_ids: Vec<usize> = entry
+                .signatures
+                .keys()
+                .copied()
+                .filter(|id| {
+                    shared
+                        .audit_pubkeys
+                        .get(id)
+                        .map(|pk| entry.verify_signature(*id, pk))
+                        .unwrap_or(false)
+                })
+                .collect();
+            let valid_sigs = valid_ids.len();
+            if valid_sigs <= shared.t {
+                eprintln!(
+                    "[node {}] refusing replicated entry seq {}: only {valid_sigs} valid co-signature(s), need > {}",
+                    shared.node_id, entry.seq, shared.t
+                );
+                return None;
+            }
+            let seq = entry.seq;
+            let mut log = shared.audit_log.lock().await;
+            if seq < log.next_seq() {
+                // We already have this entry (e.g. we're one of the
+                // original co-signers) -- just merge in any signatures we
+                // didn't have yet, rather than treating this as an error.
+                // R-1: the replicated entry must be the SAME entry we hold at this
+                // seq, and only verified signatures may be merged.
+                if log.entries[seq as usize].entry_hash != entry.entry_hash {
+                    eprintln!(
+                        "[node {}] refusing replicated entry seq {seq}: hash differs from the entry already committed here",
+                        shared.node_id
+                    );
+                    return None;
+                }
+                for (id, sig) in entry.signatures {
+                    if valid_ids.contains(&id) {
+                        let _ = log.merge_signature(seq, id, sig);
+                    }
+                }
+                persist_audit_log(&shared.audit_log_file, &log);
+                return None;
+            }
+            // R-1: strip unverified signatures before the entry becomes part of the log.
+            entry.signatures.retain(|id, _| valid_ids.contains(id));
+            match log.try_append(entry) {
+                Ok(()) => {
+                    persist_audit_log(&shared.audit_log_file, &log);
+                    {
+                        shared.pending_audit.lock().await.on_commit(seq);
+                    }
+                    eprintln!(
+                        "[node {}] replicated audit entry seq {seq} ({valid_sigs} valid co-signatures).",
+                        shared.node_id
+                    );
+                }
+                Err(reason) => {
+                    eprintln!(
+                        "[node {}] could not replicate audit entry seq {seq}: {reason}",
+                        shared.node_id
+                    );
+                }
+            }
+            None
+        }
+        Message::GetAuditLog { invoice_id } => {
+            let log = shared.audit_log.lock().await;
+            let entries = log
+                .filter_by_invoice(invoice_id.as_deref())
+                .into_iter()
+                .cloned()
+                .collect();
+            Some(Message::AuditLogEntries { entries })
+        }
+        Message::AuditLogEntries { .. } => None, // only a reader should receive this
+    }
+}
+
+fn load_or_init_audit_log(path: &str) -> AuditLog {
+    match std::fs::read(path) {
+        Ok(raw) => serde_json::from_slice(&raw).unwrap_or_else(|e| {
+            eprintln!("audit log file {path} is corrupt ({e}); starting from an empty log");
+            AuditLog::default()
+        }),
+        Err(_) => AuditLog::default(),
+    }
+}
+
+fn persist_audit_log(path: &str, log: &AuditLog) {
+    if let Some(parent) = Path::new(path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_vec_pretty(log) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+async fn finalize_if_ready(shared: &Arc<Shared>) {
+    let mut state = shared.state.lock().await;
+    let ready = matches!(&*state, NodeState::Dkg(s) if s.is_ready());
+    if !ready {
+        return;
+    }
+    let placeholder = DkgSession::new(shared.node_id, 1, 0, &mut thread_rng()).0;
+    let old = std::mem::replace(&mut *state, NodeState::Dkg(placeholder));
+    let session = match old {
+        NodeState::Dkg(s) => s,
+        NodeState::Ready { .. } => unreachable!("checked ready above"),
+    };
+    match session.finalize() {
+        Ok((secret_share, group_pks)) => {
+            eprintln!("[node {}] DKG finalized.", shared.node_id);
+            if let Some(parent) = Path::new(&shared.ready_file).parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let pubkey_json =
+                serde_json::to_vec(&group_pks).expect("PublicKeySet always serializes");
+            let _ = std::fs::write(&shared.pubkey_file, pubkey_json);
+            *state = NodeState::Ready {
+                secret_share,
+                group_pks,
+            };
+            drop(state);
+            let _ = std::fs::write(&shared.ready_file, b"ready\n");
+        }
+        Err(e) => {
+            eprintln!(
+                "[node {}] finalize() reported not ready: {e}",
+                shared.node_id
+            );
+        }
+    }
+}

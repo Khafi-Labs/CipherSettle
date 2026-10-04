@@ -1,0 +1,26 @@
+[package]
+publish = false
+name = "quorum_core"
+version = "0.1.0"
+license = "Apache-2.0"
+edition = "2021"
+description = "Transport-agnostic threshold BLS DKG + derive protocol state machine (blstrs only) for the CipherSettle threshold-quorum roadmap. Deliberately has zero networking and zero product logic in it -- see quorum_node for the service layer that wires this to real mTLS channels."
+
+[dependencies]
+quorum_audit = { path = "../quorum_audit" }
+quorum_vetseal = { path = "../quorum_vetseal" }
+blstrs = "0.7"
+ff = "0.13"
+group = "0.13"
+serde = { version = "1", features = ["derive"] }
+rand = "0.8"
+base64 = "0.22"
+hmac = "0.12"
+sha2 = "0.10"
+
+# --- Sandbox-only pin, NOT a real production dependency policy ---
+# Delete on a machine with rustup 1.85+.
+zeroize = "=1.5.7"
+
+[dev-dependencies]
+serde_json = "1"

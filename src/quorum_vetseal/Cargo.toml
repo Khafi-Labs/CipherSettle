@@ -1,0 +1,22 @@
+[package]
+publish = false
+name = "quorum_vetseal"
+version = "0.1.0"
+license = "Apache-2.0"
+edition = "2021"
+description = "Verifiable-encryption-style sealing of derived-key material (EC ElGamal over BLS12-381 G2, homomorphic Lagrange combine) so that no relay between a quorum node and the true caller ever sees a derived key in the clear. blstrs only. Zero networking and zero product logic, same convention as quorum_core."
+
+[dependencies]
+blstrs = "0.7"
+group = "0.13"
+ff = "0.13"
+rand = "0.8"
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+# Test fixture only: real DKG shares to seal. A dev-dependency cycle with
+# quorum_core (which depends on this crate) is permitted by cargo; no type
+# from the test-time copy of this crate crosses into quorum_core.
+quorum_core = { path = "../quorum_core" }
+rand_chacha = "0.3"

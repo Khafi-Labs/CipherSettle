@@ -1,0 +1,119 @@
+# Audit finding A9, step 3: license and duplicate-dependency policy,
+# enforced by .github/workflows/security.yml's cargo-deny job. Run
+# locally with `cargo deny check` (needs a reasonably current stable
+# Rust -- cargo-deny itself doesn't build under this workspace's pinned
+# 1.75 toolchain, which is exactly the edition2024 wall A6 exists to
+# remove; that's fine, this check doesn't compile the workspace's own
+# crates, only reads Cargo.lock/Cargo.toml metadata).
+
+[graph]
+# Advisory/license/ban checks apply to every target this workspace
+# actually builds for; this project doesn't cross-compile.
+targets = []
+all-features = false
+no-default-features = false
+
+# ---------------------------------------------------------------------
+# Advisories (RUSTSEC database). Kept here too, not just in
+# security.yml's `cargo audit` invocation, so `cargo deny check`
+# (which checks advisories by default) gives the same answer as the
+# dedicated audit job rather than silently re-flagging the same four
+# already-tracked findings as if they were new.
+# ---------------------------------------------------------------------
+[advisories]
+version = 2
+db-urls = ["https://github.com/rustsec/advisory-db"]
+ignore = [
+    # postgres-protocol 0.6.6, hard-pinned pending A6's toolchain-wall
+    # removal (see A3): unbounded SCRAM-SHA-256 PBKDF2 iteration count
+    # from a malicious/compromised Postgres server can pin a tokio
+    # worker thread; a malformed binary hstore value can panic the
+    # client. Fixed in 0.6.12, which requires the same newer toolchain
+    # A6 is blocked on. Remove this ignore in the same commit that lifts
+    # the pin.
+    "RUSTSEC-2026-0179",
+    "RUSTSEC-2026-0180",
+    # tokio-postgres 0.7.10, held at that version transitively by the
+    # postgres-protocol pin above: a server sending a DataRow with fewer
+    # fields than declared panics the client on Row::get/try_get. Fixed
+    # in 0.7.18. Same removal condition as the two ignores above.
+    "RUSTSEC-2026-0178",
+    # time 0.3.36 (RUSTSEC-2026-0009, stack exhaustion when parsing
+    # attacker-controlled input). Fix is 0.3.47, which needs edition2024
+    # (cargo 1.75 cannot parse it). Reachable only via rcgen, which is now
+    # used solely by test tooling (quorum_adversarial, quorum_orchestrator)
+    # to generate self-signed certs; no production binary depends on it
+    # (verified with `cargo tree -i time -e normal`, 2026-09-30). Remove in
+    # the same commit that lifts the rust-toolchain.toml pin.
+    "RUSTSEC-2026-0009",
+    # rustls-webpki 0.101.7 (RUSTSEC-2026-0098, -0099, -0104): name-constraint
+    # acceptance and CRL parsing. Fix means migrating rustls 0.21 -> 0.23.
+    # ASSESSMENT, NOT A PROOF: every TLS verifier in this workspace is a
+    # custom pinned-DER-equality verifier (quorum_node/quorum_client/
+    # quorum_notary tls.rs) that never calls WebPkiVerifier, path building or
+    # CRL handling, and no CRLs are ever supplied. rustls may still parse the
+    # end-entity cert during the handshake. Needs human review; remove when
+    # rustls is migrated.
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
+]
+
+# ---------------------------------------------------------------------
+# Licenses
+# ---------------------------------------------------------------------
+[licenses]
+version = 2
+# This project's own crates (ciphersettle_core, quorum_core, quorum_node,
+# ...) are unpublished workspace members that do carry a `license` field
+# (`Apache-2.0`, matching the repository's LICENSE file). `private.ignore`
+# keeps cargo-deny from also applying the *publish* rules to them -- it is
+# an exemption from crates.io publishing policy, NOT from the license
+# allow-list above, which these crates must still satisfy like any other
+# dependency.
+private = { ignore = true }
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "MPL-2.0",
+    "BSL-1.0",
+    "OpenSSL",
+]
+exceptions = [
+    # ring is BoringSSL-derived and carries a mixed OpenSSL/ISC/MIT
+    # license; widely accepted in the Rust ecosystem under exactly this
+    # exception pattern (rustls, tokio-rustls, and most of the TLS stack
+    # this project already depends on pull it in transitively).
+    { allow = ["OpenSSL", "ISC", "MIT"], name = "ring" },
+]
+
+# ---------------------------------------------------------------------
+# Bans: duplicate dependencies and other dependency-graph hygiene
+# ---------------------------------------------------------------------
+[bans]
+# `warn`, not `deny`: the A6 cutover to `blstrs` is done and
+# `threshold_crypto` (with its `ff 0.6`/`pairing 0.16` chain) is gone, but
+# other duplicated transitive versions (base64, sha2, digest, ...) may
+# remain. TODO: run `cargo deny check bans` and, once the remaining
+# duplicates are understood, tighten this to `deny`.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+# ---------------------------------------------------------------------
+# Sources: only the official crates.io registry, no unpinned git deps
+# ---------------------------------------------------------------------
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

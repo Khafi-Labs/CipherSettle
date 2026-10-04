@@ -1,0 +1,3 @@
+[workspace]
+members = ["src/ciphersettle_core", "src/quorum_poc", "src/quorum_core", "src/quorum_node", "src/quorum_orchestrator", "src/quorum_audit", "src/quorum_notary", "src/quorum_client", "src/quorum_service", "src/quorum_adversarial", "src/quorum_vetseal"]
+resolver = "2"

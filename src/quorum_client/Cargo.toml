@@ -1,0 +1,22 @@
+[package]
+publish = false
+name = "quorum_client"
+version = "0.1.0"
+license = "Apache-2.0"
+edition = "2021"
+description = "Shared mTLS client helpers for talking to a quorum_node cluster and quorum_notary: sending wire messages, brokering a k-of-n derive, and proposing/co-signing/replicating audit entries. Used by quorum_orchestrator (test harness) and quorum_service (Phase 3 product API) so this logic exists in exactly one place."
+
+[dependencies]
+quorum_core = { path = "../quorum_core" }
+quorum_audit = { path = "../quorum_audit" }
+quorum_vetseal = { path = "../quorum_vetseal" }
+rand = "0.8"
+tokio = { version = "1", features = ["net", "io-util", "time", "rt"] }
+tokio-rustls = "0.24"
+rustls = { version = "0.21", features = ["dangerous_configuration"] }
+serde_json = "1"
+
+# --- Sandbox-only pin, NOT a real production dependency policy ---
+# Same rustc-1.75-vs-edition2024 wall as the rest of this workspace (see
+# finding A6 in CipherSettle_Audit_Remediation_Roadmap.md). Delete on a machine with rustup 1.85+.
+zeroize = "=1.5.7"

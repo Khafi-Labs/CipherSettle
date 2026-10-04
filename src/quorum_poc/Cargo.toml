@@ -1,0 +1,19 @@
+[package]
+publish = false
+name = "quorum_poc"
+version = "0.1.0"
+license = "Apache-2.0"
+edition = "2021"
+description = "Phase 0 throwaway PoC: local DKG + derive round trip on quorum_core's blstrs-only implementation. Not production code."
+
+[dependencies]
+quorum_core = { path = "../quorum_core" }
+rand = "0.8"
+sha2 = "0.10"
+
+# --- Sandbox-only pin, NOT a real production dependency policy ---
+zeroize = "=1.5.7"
+
+[[bin]]
+name = "quorum_poc"
+path = "src/main.rs"
