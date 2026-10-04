@@ -234,7 +234,8 @@ async fn spin_up_quorum(work_dir_name: &str, base_port: u16) -> LiveQuorum {
         client_identity.cert_der.clone(),
         client_identity.key_der.clone(),
         node_identities.iter().map(|n| n.cert_der.clone()).collect(),
-    );
+    )
+    .expect("test TLS identity");
 
     LiveQuorum {
         node_identities,
@@ -388,7 +389,8 @@ async fn spawn_garbage_adversary(q: &LiveQuorum, node_id: usize, addr: String) {
     let client_cert = q.client_identity.cert_der.clone();
     tokio::spawn(async move {
         let server_config =
-            quorum_client::build_server_config(cert_der, key_der, vec![client_cert]);
+            quorum_client::build_server_config(cert_der, key_der, vec![client_cert])
+                .expect("test TLS identity");
         let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
         let listener = tokio::net::TcpListener::bind(&addr)
             .await
@@ -1282,6 +1284,27 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
         format!("invoices_without_outbox_record={orphans}"),
     );
 
+    // ---- Z4 (Gap 8 / F-21): malformed request field must not panic a handler.
+    let bad_id = format!("z4-bad-{run_id}");
+    let (st_bad, body_bad) = http_json(
+        &service_addr,
+        "POST",
+        "/invoices",
+        Some(key),
+        Some(
+            &serde_json::json!({"invoice_id": bad_id, "nullifier_hash": format!("z-null-{bad_id}"),
+            "ciphertext_b64": "!!! not base64 !!!", "commitment_b64": sample_commitment_b64(&bad_id)})
+            .to_string(),
+        ),
+    )
+    .await;
+    let (st_ok, _) = post_invoice(format!("z4-ok-{run_id}")).await;
+    report.record(
+        "Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving",
+        st_bad == 400 && (st_ok == 201 || st_ok == 202),
+        format!("bad_status={st_bad} body={body_bad:?} next_valid_status={st_ok}"),
+    );
+
     let _ = service_child.kill();
     let _ = service_child.wait();
     kill_all(&mut q.children);
@@ -1337,7 +1360,8 @@ async fn test_q_audit_log_durability(report: &mut Report) {
         nodes.client.cert_der.clone(),
         nodes.client.key_der.clone(),
         nodes.ids.iter().map(|n| n.cert_der.clone()).collect(),
-    );
+    )
+    .expect("test TLS identity");
     let addrs: Vec<(usize, String)> = nodes.addrs.iter().cloned().enumerate().collect();
     let ev = |tag: &str, i: usize| AuditEvent {
         invoice_id: format!("q-{tag}-{i}"),
@@ -1531,7 +1555,8 @@ async fn test_r_ack_implies_durable(report: &mut Report) {
         nodes.client.cert_der.clone(),
         nodes.client.key_der.clone(),
         nodes.ids.iter().map(|n| n.cert_der.clone()).collect(),
-    );
+    )
+    .expect("test TLS identity");
     let addrs: Vec<(usize, String)> = nodes.addrs.iter().cloned().enumerate().collect();
     let mut children: Vec<Child> = (0..N).map(|i| nodes.spawn(i, true)).collect();
     wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
@@ -1765,7 +1790,8 @@ async fn test_f_mtls_pentest(report: &mut Report) {
         stranger.cert_der.clone(),
         stranger.key_der.clone(),
         vec![q.node_identities[0].cert_der.clone()], // trusts the real server cert
-    );
+    )
+    .expect("test TLS identity");
     let stream2 = TcpStream::connect(&addr).await.unwrap();
     let rejected2 = match connector_stranger.connect(server_name, stream2).await {
         Err(_) => true,
@@ -1798,6 +1824,7 @@ async fn test_f_mtls_pentest(report: &mut Report) {
                 q.node_identities[legit_peer_id].key_der.clone(),
                 vec![q.node_identities[0].cert_der.clone()],
             )
+            .expect("test TLS identity")
         };
 
         let stream3 = TcpStream::connect(&addr).await.unwrap();
@@ -3322,7 +3349,8 @@ async fn test_p_share_persistence(report: &mut Report) {
         nodes.client.cert_der.clone(),
         nodes.client.key_der.clone(),
         nodes.ids.iter().map(|n| n.cert_der.clone()).collect(),
-    );
+    )
+    .expect("test TLS identity");
     let addrs: Vec<(usize, String)> = nodes.addrs.iter().cloned().enumerate().collect();
     let identity = "p-invoice-1";
     let transport_sk = quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng());

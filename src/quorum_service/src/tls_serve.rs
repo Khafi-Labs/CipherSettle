@@ -106,7 +106,10 @@ pub async fn serve(
 /// would want a full chain, which this can be extended to accept
 /// (`Vec<Certificate>`) without changing the shape of anything else
 /// here.
-pub fn build_acceptor(cert_der: Vec<u8>, key_der: Vec<u8>) -> tokio_rustls::TlsAcceptor {
+pub fn build_acceptor(
+    cert_der: Vec<u8>,
+    key_der: Vec<u8>,
+) -> Result<tokio_rustls::TlsAcceptor, String> {
     let config = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
@@ -114,6 +117,6 @@ pub fn build_acceptor(cert_der: Vec<u8>, key_der: Vec<u8>) -> tokio_rustls::TlsA
             vec![rustls::Certificate(cert_der)],
             rustls::PrivateKey(key_der),
         )
-        .expect("bad TLS server cert/key");
-    tokio_rustls::TlsAcceptor::from(Arc::new(config))
+        .map_err(|e| format!("bad TLS server cert/key: {e}"))?;
+    Ok(tokio_rustls::TlsAcceptor::from(Arc::new(config)))
 }

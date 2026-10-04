@@ -1,0 +1,472 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+
+--- Test Z: service audit semantics (F-13/F-14) ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9801
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9800
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9802
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9803
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node [node 4] starting: n=5 t=2 listen=127.0.0.1:9804
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+0 -> 3] sent commitment + share
+[node [node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+2 -> 1] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 2] DKG finalized.
+[node 3 -> 4] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node [node 2 -> 4] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 3] DKG finalized.
+[node 4] DKG finalized.
+0] DKG finalized.
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 0 leaves.
+[service] listening on 127.0.0.1:9809
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 3] co-signed (pending) audit entry seq 0.
+[node 4] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[service] AUDIT PENDING outbox_id=1 action=invoice_registered invoice=z2-1791107342674447509 attempts=1: audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt (a competing proposal holds the vote slots; they free on commit or after the vote TTL)
+[PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change): split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+[PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record: invoice_row_exists=true outbox_status=Ok(Some("pending"))
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[service] AUDIT PENDING outbox_id=1 action=invoice_registered invoice=z2-1791107342674447509 attempts=2: audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt (a competing proposal holds the vote slots; they free on commit or after the vote TTL)
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence): drained=true entries_for_invoice=1 chain_ok=true after=7261ms
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 0] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 2.
+[node 1] co-signed (pending) audit entry seq 2.
+[node 2] co-signed (pending) audit entry seq 2.
+[node 0] replicated audit entry seq 2 (3 valid co-signatures).
+[node 1] replicated audit entry seq 2 (3 valid co-signatures).
+[node 2] replicated audit entry seq 2 (3 valid co-signatures).
+[node 3] replicated audit entry seq 2 (3 valid co-signatures).
+[node 4] replicated audit entry seq 2 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 3.
+[node 1] co-signed (pending) audit entry seq 3.
+[node 2] co-signed (pending) audit entry seq 3.
+[node 0] replicated audit entry seq 3 (3 valid co-signatures).
+[node 1] replicated audit entry seq 3 (3 valid co-signatures).
+[node 2] replicated audit entry seq 3 (3 valid co-signatures).
+[node 3] replicated audit entry seq 3 (3 valid co-signatures).
+[node 4] replicated audit entry seq 3 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 4.
+[node 1] co-signed (pending) audit entry seq 4.
+[node 2] co-signed (pending) audit entry seq 4.
+[node 0] replicated audit entry seq 4 (3 valid co-signatures).
+[node 1] replicated audit entry seq 4 (3 valid co-signatures).
+[node 2] replicated audit entry seq 4 (3 valid co-signatures).
+[node 3] replicated audit entry seq 4 (3 valid co-signatures).
+[node 4] replicated audit entry seq 4 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 5.
+[node 1] co-signed (pending) audit entry seq 5.
+[node 2] co-signed (pending) audit entry seq 5.
+[node 0] replicated audit entry seq 5 (3 valid co-signatures).
+[node 1] replicated audit entry seq 5 (3 valid co-signatures).
+[node 2] replicated audit entry seq 5 (3 valid co-signatures).
+[node 3] replicated audit entry seq 5 (3 valid co-signatures).
+[node 4] replicated audit entry seq 5 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 6.
+[node 1] co-signed (pending) audit entry seq 6.
+[node 2] co-signed (pending) audit entry seq 6.
+[node 0] replicated audit entry seq 6 (3 valid co-signatures).
+[node 1] replicated audit entry seq 6 (3 valid co-signatures).
+[node 2] replicated audit entry seq 6 (3 valid co-signatures).
+[node 3] replicated audit entry seq 6 (3 valid co-signatures).
+[node 4] replicated audit entry seq 6 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 7.
+[node 1] co-signed (pending) audit entry seq 7.
+[node 2] co-signed (pending) audit entry seq 7.
+[node 0] replicated audit entry seq 7 (3 valid co-signatures).
+[node 1] replicated audit entry seq 7 (3 valid co-signatures).
+[node 2] replicated audit entry seq 7 (3 valid co-signatures).
+[node 3] replicated audit entry seq 7 (3 valid co-signatures).
+[node 4] replicated audit entry seq 7 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 8.
+[node 1] co-signed (pending) audit entry seq 8.
+[node 2] co-signed (pending) audit entry seq 8.
+[node 0] replicated audit entry seq 8 (3 valid co-signatures).
+[node 1] replicated audit entry seq 8 (3 valid co-signatures).
+[node 2] replicated audit entry seq 8 (3 valid co-signatures).
+[node 3] replicated audit entry seq 8 (3 valid co-signatures).
+[node 4] replicated audit entry seq 8 (3 valid co-signatures).
+[PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention): statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+[PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate): pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+[PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table): invoices_without_outbox_record=0
+
+thread 'tokio-rt-worker' (9281) panicked at src/quorum_core/src/config.rs:93:10:
+config contains invalid base64 -- corrupt or hand-edited config file: InvalidByte(0, 33)
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/panicking.rs:698:5
+   1: core::panicking::panic_fmt
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/core/src/panicking.rs:75:14
+   2: core::result::unwrap_failed
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/core/src/result.rs:1855:5
+   3: core::result::Result<T,E>::expect
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/core/src/result.rs:1178:23
+   4: quorum_core::config::b64_decode
+             at ./src/quorum_core/src/config.rs:93:10
+   5: quorum_service::register_invoice::{{closure}}
+             at ./src/quorum_service/src/main.rs:440:22
+   6: <F as axum::handler::Handler<(M,T1,T2,T3),S>>::call::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-0.7.9/src/handler/mod.rs:241:53
+   7: <core::pin::Pin<P> as core::future::future::Future>::poll
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/core/src/future/future.rs:133:9
+   8: <futures_util::future::future::map::Map<Fut,F> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.34/src/future/future/map.rs:55:44
+   9: <futures_util::future::future::Map<Fut,F> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.34/src/lib.rs:85:35
+  10: <axum::handler::future::IntoServiceFuture<F> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-0.7.9/src/macros.rs:42:39
+  11: <F as futures_core::future::TryFuture>::try_poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-core-0.3.34/src/future.rs:92:14
+  12: <futures_util::future::try_future::into_future::IntoFuture<Fut> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.34/src/future/try_future/into_future.rs:34:31
+  13: <futures_util::future::future::map::Map<Fut,F> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.34/src/future/future/map.rs:55:44
+  14: <futures_util::future::future::Map<Fut,F> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.34/src/lib.rs:85:35
+  15: <futures_util::future::try_future::MapOk<Fut,F> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.34/src/lib.rs:85:35
+  16: <tower::util::map_response::MapResponseFuture<F,N> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tower-0.5.3/src/macros.rs:38:38
+  17: <core::pin::Pin<P> as core::future::future::Future>::poll
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/core/src/future/future.rs:133:9
+  18: <tower::util::oneshot::Oneshot<S,Req> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tower-0.5.3/src/util/oneshot.rs:96:42
+  19: <axum::routing::route::RouteFuture<E> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-0.7.9/src/routing/route.rs:182:68
+  20: <hyper_util::service::oneshot::Oneshot<S,Req> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/service/oneshot.rs:54:42
+  21: <hyper_util::service::glue::TowerToHyperServiceFuture<S,R> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/service/glue.rs:70:31
+  22: <hyper::proto::h1::dispatch::Server<S,hyper::body::incoming::Incoming> as hyper::proto::h1::dispatch::Dispatch>::poll_msg
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/proto/h1/dispatch.rs:603:48
+  23: hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/proto/h1/dispatch.rs:364:72
+  24: hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_loop
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/proto/h1/dispatch.rs:174:36
+  25: hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_inner
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/proto/h1/dispatch.rs:150:21
+  26: hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_catch
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/proto/h1/dispatch.rs:128:33
+  27: <hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/proto/h1/dispatch.rs:504:14
+  28: <hyper::server::conn::http1::UpgradeableConnection<I,S> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/server/conn/http1.rs:553:51
+  29: <hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/server/conn/auto/mod.rs:693:33
+  30: <axum::serve::Serve<M,S> as core::future::into_future::IntoFuture>::into_future::{{closure}}::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-0.7.9/src/serve.rs:257:26
+  31: tokio::runtime::task::core::Core<T,S>::poll::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/core.rs:380:24
+  32: tokio::loom::std::unsafe_cell::UnsafeCell<T>::with_mut
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/loom/std/unsafe_cell.rs:16:9
+  33: tokio::runtime::task::core::Core<T,S>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/core.rs:369:30
+  34: tokio::runtime::task::harness::poll_future::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:535:30
+  35: <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/core/src/panic/unwind_safe.rs:274:9
+  36: std::panicking::catch_unwind::do_call
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/panicking.rs:590:40
+  37: __rust_try
+  38: std::panicking::catch_unwind
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/panicking.rs:553:19
+  39: std::panic::catch_unwind
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/panic.rs:359:14
+  40: tokio::runtime::task::harness::poll_future
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:523:18
+  41: tokio::runtime::task::harness::Harness<T,S>::poll_inner
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:210:27
+  42: tokio::runtime::task::harness::Harness<T,S>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:155:20
+  43: tokio::runtime::task::raw::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/raw.rs:343:13
+  44: tokio::runtime::task::raw::RawTask::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/raw.rs:273:18
+  45: tokio::runtime::task::LocalNotified<S>::run
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/mod.rs:519:13
+  46: tokio::runtime::scheduler::multi_thread::worker::Context::run_task::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/multi_thread/worker.rs:698:18
+  47: tokio::task::coop::with_budget
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/task/coop/mod.rs:167:5
+  48: tokio::task::coop::budget
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/task/coop/mod.rs:133:5
+  49: tokio::runtime::scheduler::multi_thread::worker::Context::run_task
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/multi_thread/worker.rs:689:9
+  50: tokio::runtime::scheduler::multi_thread::worker::Context::run
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/multi_thread/worker.rs:596:29
+  51: tokio::runtime::scheduler::multi_thread::worker::run::{{closure}}::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/multi_thread/worker.rs:561:24
+  52: tokio::runtime::context::scoped::Scoped<T>::set
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context/scoped.rs:40:9
+  53: tokio::runtime::context::set_scheduler::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context.rs:187:38
+  54: std::thread::local::LocalKey<T>::try_with
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/thread/local.rs:315:12
+  55: std::thread::local::LocalKey<T>::with
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/thread/local.rs:279:20
+  56: tokio::runtime::context::set_scheduler
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context.rs:187:17
+  57: tokio::runtime::scheduler::multi_thread::worker::run::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/multi_thread/worker.rs:556:9
+  58: tokio::runtime::context::runtime::enter_runtime
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context/runtime.rs:65:16
+  59: tokio::runtime::scheduler::multi_thread::worker::run
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/multi_thread/worker.rs:548:5
+  60: tokio::runtime::scheduler::multi_thread::worker::Launch::launch::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/multi_thread/worker.rs:514:45
+  61: <tokio::runtime::blocking::task::BlockingTask<T> as core::future::future::Future>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/blocking/task.rs:42:21
+  62: tokio::runtime::task::core::Core<T,S>::poll::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/core.rs:380:24
+  63: tokio::loom::std::unsafe_cell::UnsafeCell<T>::with_mut
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/loom/std/unsafe_cell.rs:16:9
+  64: tokio::runtime::task::core::Core<T,S>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/core.rs:369:30
+  65: tokio::runtime::task::harness::poll_future::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:535:30
+  66: <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/core/src/panic/unwind_safe.rs:274:9
+  67: std::panicking::catch_unwind::do_call
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/panicking.rs:590:40
+  68: __rust_try
+  69: std::panicking::catch_unwind
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/panicking.rs:553:19
+  70: std::panic::catch_unwind
+             at /build/rustc-1.91-CXDYuc/rustc-1.91-1.91.1+dfsg~24.04/library/std/src/panic.rs:359:14
+  71: tokio::runtime::task::harness::poll_future
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:523:18
+  72: tokio::runtime::task::harness::Harness<T,S>::poll_inner
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:210:27
+  73: tokio::runtime::task::harness::Harness<T,S>::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/harness.rs:155:20
+  74: tokio::runtime::task::raw::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/raw.rs:343:13
+  75: tokio::runtime::task::raw::RawTask::poll
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/raw.rs:273:18
+  76: tokio::runtime::task::UnownedTask<S>::run
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/task/mod.rs:565:13
+  77: tokio::runtime::blocking::pool::Task::run
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/blocking/pool.rs:161:19
+  78: tokio::runtime::blocking::pool::Inner::run
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/blocking/pool.rs:518:22
+  79: tokio::runtime::blocking::pool::Spawner::spawn_thread::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/blocking/pool.rs:474:47
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+[node 0] co-signed (pending) audit entry seq 9.
+[node 1] co-signed (pending) audit entry seq 9.
+[node 2] co-signed (pending) audit entry seq 9.
+[node 0] replicated audit entry seq 9 (3 valid co-signatures).
+[node 1] replicated audit entry seq 9 (3 valid co-signatures).
+[node 2] replicated audit entry seq 9 (3 valid co-signatures).
+[node 3] replicated audit entry seq 9 (3 valid co-signatures).
+[node 4] replicated audit entry seq 9 (3 valid co-signatures).
+[FAIL] Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving: bad_status=0 body="" next_valid_status=201
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change) -- split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+  [PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record -- invoice_row_exists=true outbox_status=Ok(Some("pending"))
+  [PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence) -- drained=true entries_for_invoice=1 chain_ok=true after=7261ms
+  [PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention) -- statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+  [PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate) -- pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+  [PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table) -- invoices_without_outbox_record=0
+  [FAIL] Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving -- bad_status=0 body="" next_valid_status=201
+6/7 checks passed as expected.

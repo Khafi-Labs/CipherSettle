@@ -28,6 +28,17 @@
 //! stops it, and external notarization (below) is what stops it even for
 //! a colluding *majority* of nodes -- see this module's `notary` types.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -53,7 +64,16 @@ fn hash_entry(prev_hash: &Hash, seq: u64, event: &AuditEvent) -> Hash {
     let mut hasher = Sha256::new();
     hasher.update(prev_hash);
     hasher.update(seq.to_be_bytes());
-    hasher.update(serde_json::to_vec(event).expect("AuditEvent always serializes"));
+    // AuditEvent is plain strings + u64, so serialization cannot fail. If it
+    // ever did, we must NOT fall back to hashing nothing (two different events
+    // could then collide); a distinct marker keeps the chain fail-closed.
+    match serde_json::to_vec(event) {
+        Ok(bytes) => hasher.update(bytes),
+        Err(e) => {
+            hasher.update(b"quorum_audit/serialize-error/v1");
+            hasher.update(e.to_string().as_bytes());
+        }
+    }
     let out = hasher.finalize();
     let mut h = [0u8; 32];
     h.copy_from_slice(&out);
@@ -309,11 +329,13 @@ impl AuditLog {
             for (hash, _) in &votes {
                 *counts.entry(*hash).or_insert(0) += 1;
             }
-            let (winning_hash, winning_count) = counts
+            let Some((winning_hash, winning_count)) = counts
                 .iter()
                 .max_by_key(|(_, count)| **count)
                 .map(|(h, c)| (*h, *c))
-                .unwrap();
+            else {
+                break 'seq; // unreachable in practice: votes is non-empty
+            };
             if winning_count * 2 <= votes.len() {
                 // No strict majority at this seq -- stop extending the
                 // reference here rather than guessing; reconciliation
@@ -322,8 +344,10 @@ impl AuditLog {
                 // outcome when there's no agreement to anchor to.
                 break 'seq;
             }
-            let winning_entry = votes.iter().find(|(h, _)| *h == winning_hash).unwrap().1;
-            reference_entries.push(winning_entry.clone());
+            let Some((_, winning_entry)) = votes.iter().find(|(h, _)| *h == winning_hash) else {
+                break 'seq;
+            };
+            reference_entries.push((*winning_entry).clone());
         }
 
         AuditLog {

@@ -14,6 +14,17 @@
 //! where the transport secret key lives) and
 //! [`propose_and_cosign_and_replicate`].
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 use quorum_audit::wire::NotaryMessage;
 use quorum_audit::{AuditEntry, AuditEvent, AuditLog};
 use quorum_core::Message;
@@ -68,7 +79,7 @@ pub fn build_connector(
     client_cert_der: Vec<u8>,
     client_key_der: Vec<u8>,
     allowed_server_certs_der: Vec<Vec<u8>>,
-) -> TlsConnector {
+) -> Result<TlsConnector, String> {
     let verifier = Arc::new(PinnedServerVerifier {
         allowed_der: allowed_server_certs_der,
     });
@@ -79,8 +90,8 @@ pub fn build_connector(
             vec![Certificate(client_cert_der)],
             PrivateKey(client_key_der),
         )
-        .expect("bad client cert/key");
-    TlsConnector::from(Arc::new(config))
+        .map_err(|e| format!("bad client cert/key: {e}"))?;
+    Ok(TlsConnector::from(Arc::new(config)))
 }
 
 /// Server-side pinned-certificate verifier: same exact-byte-match model,
@@ -129,7 +140,7 @@ pub fn build_server_config(
     cert_der: Vec<u8>,
     key_der: Vec<u8>,
     allowed_client_certs_der: Vec<Vec<u8>>,
-) -> rustls::ServerConfig {
+) -> Result<rustls::ServerConfig, String> {
     let verifier = Arc::new(PinnedClientVerifier {
         allowed_der: allowed_client_certs_der,
     });
@@ -137,7 +148,7 @@ pub fn build_server_config(
         .with_safe_defaults()
         .with_client_cert_verifier(verifier)
         .with_single_cert(vec![Certificate(cert_der)], PrivateKey(key_der))
-        .expect("bad server cert/key")
+        .map_err(|e| format!("bad server cert/key: {e}"))
 }
 
 /// Same as [`send_request`] but for messages that never get a response
@@ -713,10 +724,10 @@ pub async fn fetch_majority_tip(
         ));
     }
 
-    Ok(valid_logs
+    valid_logs
         .into_iter()
         .max_by_key(|log| log.next_seq())
-        .expect("valid_logs.len() >= majority_needed >= 1, checked above"))
+        .ok_or_else(|| "no valid audit log available to establish a tip".to_string())
 }
 
 /// The composite operation a product-layer caller actually wants:

@@ -26,6 +26,17 @@
 //! Merkle proof only proves inclusion under a root, not who was entitled
 //! to publish that root.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 pub mod commitment;
 pub use commitment::{
     InvoiceCommitment, InvoiceFields, INVOICE_COMMITMENT_SALT_LEN, INVOICE_COMMITMENT_VERSION,

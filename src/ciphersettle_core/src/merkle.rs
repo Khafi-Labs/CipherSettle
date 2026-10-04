@@ -104,16 +104,15 @@ fn hash_node(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
 /// With one peak, the root *is* that peak's hash unchanged -- so a log
 /// whose leaf count is exactly a power of two (a single mountain) has
 /// a root identical to that mountain's own Merkle root, with no extra
-/// hashing layered on top. Panics if `peaks` is empty; callers only
-/// reach this with at least one peak (an empty log has no root at
-/// all, see [`MerkleLog::root`]).
-fn bag_peaks(peaks: &[[u8; 32]]) -> [u8; 32] {
-    let mut iter = peaks.iter().rev();
-    let mut acc = *iter.next().expect("bag_peaks called with no peaks");
-    for p in iter {
+/// hashing layered on top. Returns `None` if `peaks` is empty (an empty log
+/// has no root at all, see [`MerkleLog::root`]) -- never a made-up hash.
+fn bag_peaks(peaks: &[[u8; 32]]) -> Option<[u8; 32]> {
+    let (last, rest) = peaks.split_last()?;
+    let mut acc = *last;
+    for p in rest.iter().rev() {
         acc = hash_node(p, &acc);
     }
-    acc
+    Some(acc)
 }
 
 /// Decomposes `leaf_count` into `(start, size)` ranges, one per
@@ -194,7 +193,7 @@ impl MerkleLog {
             .into_iter()
             .map(|(start, size)| self.subtree_root(start, size))
             .collect();
-        Some(bag_peaks(&peaks))
+        bag_peaks(&peaks)
     }
 
     /// Builds the bottom-up (leaf-to-peak) sibling path for `idx`
@@ -321,7 +320,9 @@ impl MerkleProof {
             return false;
         }
 
-        let root = bag_peaks(&self.peaks);
+        let Some(root) = bag_peaks(&self.peaks) else {
+            return false;
+        };
         bool::from(root.ct_eq(expected_root))
     }
 }
@@ -329,6 +330,16 @@ impl MerkleProof {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bag_peaks_of_nothing_is_none_and_empty_peak_proof_is_rejected() {
+        assert!(bag_peaks(&[]).is_none());
+        let (log, data) = build_log(3);
+        let mut proof = log.prove(0).unwrap();
+        proof.peaks.clear();
+        let root = log.root().unwrap();
+        assert!(!proof.verify(&data[0], &root));
+    }
 
     fn build_log(n: usize) -> (MerkleLog, Vec<Vec<u8>>) {
         let mut log = MerkleLog::new();

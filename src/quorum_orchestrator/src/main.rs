@@ -312,7 +312,8 @@ async fn main() {
         client_identity.cert_der.clone(),
         client_identity.key_der.clone(),
         client_verifier_certs,
-    );
+    )
+    .expect("test TLS identity");
 
     let identity = "inv-2026-000042";
     println!("[derive] requesting a derive for identity {identity:?} from nodes {surviving_ids:?} over mTLS...");

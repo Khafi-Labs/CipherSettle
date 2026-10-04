@@ -33,6 +33,17 @@
 //! processes, but not outside whoever operates this sandbox. Treat this
 //! as a protocol-correct stand-in, not a production notary.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 mod tls;
 
 use ed25519_dalek::{Signer, SigningKey};
@@ -75,50 +86,70 @@ struct Shared {
     receipts_file: String,
 }
 
-fn b64_decode(s: &str) -> Vec<u8> {
+/// Startup-only: print and exit 1 (Gap 8: no panic on unusable configuration).
+fn fatal(msg: impl std::fmt::Display) -> ! {
+    eprintln!("[notary] refusing to start: {msg}");
+    std::process::exit(1)
+}
+
+fn or_fatal<T, E: std::fmt::Display>(what: &str, r: Result<T, E>) -> T {
+    match r {
+        Ok(v) => v,
+        Err(e) => fatal(format!("{what}: {e}")),
+    }
+}
+
+fn b64_decode(field: &str, s: &str) -> Vec<u8> {
     use base64::Engine;
-    base64::engine::general_purpose::STANDARD
-        .decode(s)
-        .expect("invalid base64 in notary config")
+    or_fatal(
+        &format!("config field {field}"),
+        base64::engine::general_purpose::STANDARD.decode(s),
+    )
 }
 
 #[tokio::main]
 async fn main() {
-    let config_path = std::env::args()
-        .nth(1)
-        .expect("usage: quorum_notary <config.json>");
+    let Some(config_path) = std::env::args().nth(1) else {
+        fatal("usage: quorum_notary <config.json>");
+    };
     let config: NotaryConfig = {
-        let raw = std::fs::read_to_string(&config_path)
-            .unwrap_or_else(|e| panic!("failed to read config {config_path}: {e}"));
-        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("invalid config JSON: {e}"))
+        let raw = or_fatal(
+            &format!("failed to read config {config_path}"),
+            std::fs::read_to_string(&config_path),
+        );
+        or_fatal("invalid config JSON", serde_json::from_str(&raw))
     };
 
     eprintln!("[notary] starting on {}", config.listen_addr);
 
-    let own_cert = Certificate(b64_decode(&config.cert_der_b64));
-    let own_key = PrivateKey(b64_decode(&config.key_der_b64));
+    let own_cert = Certificate(b64_decode("cert_der_b64", &config.cert_der_b64));
+    let own_key = PrivateKey(b64_decode("key_der_b64", &config.key_der_b64));
     let allowed: Vec<Vec<u8>> = config
         .allowed_client_certs_b64
         .iter()
-        .map(|s| b64_decode(s))
+        .map(|s| b64_decode("allowed_client_certs_b64[]", s))
         .collect();
     let verifier = tls::PinnedCertVerifier::new(allowed);
 
-    let server_config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
-        .with_client_cert_verifier(verifier)
-        .with_single_cert(vec![own_cert], own_key)
-        .expect("bad notary cert/key");
+    let server_config = or_fatal(
+        "bad notary cert/key",
+        rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_client_cert_verifier(verifier)
+            .with_single_cert(vec![own_cert], own_key),
+    );
     let acceptor = TlsAcceptor::from(Arc::new(server_config));
 
-    let keypair_bytes = b64_decode(&config.audit_keypair_b64);
+    let keypair_bytes = b64_decode("audit_keypair_b64", &config.audit_keypair_b64);
     let keypair_seed: [u8; 32] = keypair_bytes
         .as_slice()
         .try_into()
-        .unwrap_or_else(|_| panic!(
-            "invalid audit_keypair_b64: expected 32 bytes (ed25519-dalek 2.x SigningKey seed), got {}",
-            keypair_bytes.len()
-        ));
+        .unwrap_or_else(|_| {
+            fatal(format!(
+                "invalid audit_keypair_b64: expected 32 bytes (ed25519-dalek 2.x SigningKey seed), got {}",
+                keypair_bytes.len()
+            ))
+        });
     // Audit finding A4: SigningKey::from_bytes is infallible (any 32
     // bytes is a valid seed) -- the old .expect() here was catching
     // the wrong-length case, now handled explicitly above.
@@ -137,9 +168,10 @@ async fn main() {
         receipts_file: config.receipts_file.clone(),
     });
 
-    let listener = TcpListener::bind(&config.listen_addr)
-        .await
-        .unwrap_or_else(|e| panic!("failed to bind {}: {e}", config.listen_addr));
+    let listener = or_fatal(
+        &format!("failed to bind {}", config.listen_addr),
+        TcpListener::bind(&config.listen_addr).await,
+    );
     loop {
         let (stream, peer_addr) = match listener.accept().await {
             Ok(v) => v,
@@ -181,10 +213,13 @@ async fn handle_connection(
             NotaryMessage::NotarizeRequest { root_hash } => {
                 let mut receipts = shared.receipts.lock().await;
                 let sequence = receipts.len() as u64;
-                let notarized_at_unix_ms = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("system clock is before the epoch")
-                    .as_millis() as u64;
+                // Never sign a receipt with a bogus time: if the clock is before
+                // the epoch, refuse (the client sees no receipt) instead of panicking.
+                let Ok(since_epoch) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+                    eprintln!("[notary] system clock is before the epoch; refusing to notarize");
+                    continue;
+                };
+                let notarized_at_unix_ms = since_epoch.as_millis() as u64;
                 let bytes =
                     NotarizationReceipt::signable_bytes(sequence, &root_hash, notarized_at_unix_ms);
                 let notary_signature = shared.keypair.sign(&bytes).to_bytes().to_vec();
@@ -211,7 +246,10 @@ async fn handle_connection(
                 continue; // only a client should ever send these
             }
         };
-        let mut out = serde_json::to_vec(&response).expect("NotaryMessage always serializes");
+        let Ok(mut out) = serde_json::to_vec(&response) else {
+            eprintln!("[notary] could not serialize response; dropping it");
+            continue;
+        };
         out.push(b'\n');
         write_half.write_all(&out).await?;
     }

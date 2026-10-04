@@ -39,6 +39,17 @@
 //! ciphertext is caught at final verification) use `quorum_core`'s DKG as a
 //! dev-dependency only, as a source of real shares.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 use blstrs::{G2Affine, G2Projective, Scalar};
 use ff::{Field, PrimeField};
 use group::{Curve, Group};

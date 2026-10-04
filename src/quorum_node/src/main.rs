@@ -32,6 +32,17 @@
 //!   `BufReader::lines()`; see that module's doc for the cap and why it
 //!   was set where it was.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 mod audit_store;
 mod bounded_line_reader;
 mod share_store;
@@ -40,7 +51,7 @@ mod tls;
 use bounded_line_reader::BoundedLineReader;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use quorum_audit::AuditLog;
-use quorum_core::config::{b64_decode, NodeConfig};
+use quorum_core::config::{b64_decode, or_fatal, NodeConfig};
 use quorum_core::{
     derive_request_predates_restart, now_unix_ms, verify_derive_auth, DkgSession, Message,
     MAX_DERIVE_AUTH_WINDOW_MS,
@@ -119,6 +130,14 @@ enum Boot {
 fn fatal(msg: &str) -> ! {
     eprintln!("[node] FATAL: {msg}");
     std::process::exit(2)
+}
+
+/// Startup-only base64 decode of a config value: exits cleanly on bad input.
+fn cfg_b64(field: &str, s: &str) -> Vec<u8> {
+    match b64_decode(s) {
+        Ok(v) => v,
+        Err(e) => fatal(&format!("config field {field}: {e}")),
+    }
 }
 
 fn parse_hex32(s: &str) -> Result<[u8; 32], String> {
@@ -253,7 +272,7 @@ async fn main() {
         ) else {
             fatal("usage: quorum_node derive-auth-key <master_b64> <node_id>");
         };
-        let master = b64_decode(&master_b64);
+        let master = cfg_b64("master_b64", &master_b64);
         if master.len() < quorum_core::MIN_AUTH_MASTER_BYTES {
             fatal("master secret must decode to at least 32 bytes");
         }
@@ -265,13 +284,16 @@ async fn main() {
         );
         return;
     }
-    let config_path = std::env::args()
-        .nth(1)
-        .expect("usage: quorum_node <config.json>");
+    let Some(config_path) = std::env::args().nth(1) else {
+        fatal("usage: quorum_node <config.json>");
+    };
     let config: NodeConfig = {
-        let raw = std::fs::read_to_string(&config_path)
-            .unwrap_or_else(|e| panic!("failed to read config {config_path}: {e}"));
-        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("invalid config JSON: {e}"))
+        let raw = or_fatal(
+            "node",
+            &format!("failed to read config {config_path}"),
+            std::fs::read_to_string(&config_path),
+        );
+        or_fatal("node", "invalid config JSON", serde_json::from_str(&raw))
     };
 
     eprintln!(
@@ -286,9 +308,9 @@ async fn main() {
         Err(e) => fatal(&e),
     };
 
-    let own_cert = Certificate(b64_decode(&config.cert_der_b64));
-    let own_key = PrivateKey(b64_decode(&config.key_der_b64));
-    let client_cert_der = b64_decode(&config.client_cert_der_b64);
+    let own_cert = Certificate(cfg_b64("cert_der_b64", &config.cert_der_b64));
+    let own_key = PrivateKey(cfg_b64("key_der_b64", &config.key_der_b64));
+    let client_cert_der = cfg_b64("client_cert_der_b64", &config.client_cert_der_b64);
 
     // Pinned allow-list: every other quorum member's cert, plus the
     // designated derive-client's cert. This node's own cert is not in the
@@ -296,23 +318,29 @@ async fn main() {
     let mut allowed: Vec<Vec<u8>> = config
         .peers
         .iter()
-        .map(|p| b64_decode(&p.cert_der_b64))
+        .map(|p| cfg_b64("peers[].cert_der_b64", &p.cert_der_b64))
         .collect();
     allowed.push(client_cert_der);
     let verifier = tls::PinnedCertVerifier::new(allowed);
 
-    let server_config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
-        .with_client_cert_verifier(verifier.clone())
-        .with_single_cert(vec![own_cert.clone()], own_key.clone())
-        .expect("bad own cert/key for server config");
+    let server_config = or_fatal(
+        "node",
+        "bad own cert/key for server config",
+        rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_client_cert_verifier(verifier.clone())
+            .with_single_cert(vec![own_cert.clone()], own_key.clone()),
+    );
     let acceptor = TlsAcceptor::from(Arc::new(server_config));
 
-    let client_config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_custom_certificate_verifier(verifier)
-        .with_client_auth_cert(vec![own_cert], own_key)
-        .expect("bad own cert/key for client config");
+    let client_config = or_fatal(
+        "node",
+        "bad own cert/key for client config",
+        rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(verifier)
+            .with_client_auth_cert(vec![own_cert], own_key),
+    );
     let connector = TlsConnector::from(Arc::new(client_config));
 
     // --- DKG setup: become our own dealer, and immediately self-loop our
@@ -322,13 +350,21 @@ async fn main() {
     let mut rng = thread_rng();
     let (mut session, my_commitment) =
         DkgSession::new(config.node_id, config.n, config.t, &mut rng);
-    session
-        .receive_commitment(config.node_id, my_commitment.clone())
-        .expect("a node's own commitment must have exactly t+1 coefficients");
+    or_fatal(
+        "node",
+        "own DKG commitment rejected (must have exactly t+1 coefficients)",
+        session
+            .receive_commitment(config.node_id, my_commitment.clone())
+            .map_err(|c| format!("{c:?}")),
+    );
     let my_self_share = session.share_for(config.node_id);
-    session
-        .receive_share(config.node_id, my_self_share)
-        .expect("a node's share to itself must always verify");
+    or_fatal(
+        "node",
+        "own DKG share failed to verify",
+        session
+            .receive_share(config.node_id, my_self_share)
+            .map_err(|c| format!("{c:?}")),
+    );
 
     // Pre-compute every peer's share now, before the session moves behind
     // a shared lock -- outbound push tasks don't need session access at
@@ -345,16 +381,16 @@ async fn main() {
 
     let is_ready_already = session.is_ready(); // only true if n == 1, i.e. never in practice
 
-    let audit_keypair_bytes = b64_decode(&config.audit_keypair_b64);
+    let audit_keypair_bytes = cfg_b64("audit_keypair_b64", &config.audit_keypair_b64);
     let audit_keypair_seed: [u8; 32] = audit_keypair_bytes
         .as_slice()
         .try_into()
-        .unwrap_or_else(|_| panic!(
+        .unwrap_or_else(|_| fatal(&format!(
             "invalid audit_keypair_b64: expected 32 bytes (ed25519-dalek 2.x SigningKey seed), got {}. \
              If this config predates audit finding A4's migration, it was generated against \
              ed25519-dalek 1.x's 64-byte Keypair::to_bytes() format and needs regenerating.",
             audit_keypair_bytes.len()
-        ));
+        )));
     // Audit finding A4: SigningKey::from_bytes takes exactly a 32-byte
     // seed (2.x), not the 64-byte secret||public blob 1.x's
     // Keypair::from_bytes expected -- audit_keypair_seed is already
@@ -364,17 +400,21 @@ async fn main() {
         .peers
         .iter()
         .map(|p| {
-            let bytes = b64_decode(&p.audit_pubkey_b64);
+            let bytes = cfg_b64("peers[].audit_pubkey_b64", &p.audit_pubkey_b64);
             let array: [u8; 32] = bytes.as_slice().try_into().unwrap_or_else(|_| {
-                panic!(
+                fatal(&format!(
                     "invalid peer audit pubkey for node {}: expected 32 bytes, got {}",
                     p.id,
                     bytes.len()
-                )
+                ))
             });
             (
                 p.id,
-                VerifyingKey::from_bytes(&array).expect("invalid peer audit pubkey in config"),
+                or_fatal(
+                    "node",
+                    &format!("invalid peer audit pubkey for node {} in config", p.id),
+                    VerifyingKey::from_bytes(&array),
+                ),
             )
         })
         .collect();
@@ -390,7 +430,7 @@ async fn main() {
             config.audit_log_file
         )),
     };
-    let service_auth_key = b64_decode(&config.service_auth_key_b64);
+    let service_auth_key = cfg_b64("service_auth_key_b64", &config.service_auth_key_b64);
 
     let (initial_state, ceremony_store, resumed_pks) = match boot {
         Boot::Resume {
@@ -432,9 +472,11 @@ async fn main() {
     }
 
     // --- Inbound: accept peer/client connections and serve them. ---
-    let listener = TcpListener::bind(&config.listen_addr)
-        .await
-        .unwrap_or_else(|e| panic!("failed to bind {}: {e}", config.listen_addr));
+    let listener = or_fatal(
+        "node",
+        &format!("failed to bind {}", config.listen_addr),
+        TcpListener::bind(&config.listen_addr).await,
+    );
     {
         let shared = shared.clone();
         let acceptor = acceptor.clone();
@@ -498,7 +540,10 @@ async fn push_dkg_to_peer(
     commitment: quorum_core::Commitment,
     share: [u8; 32],
 ) {
-    let server_name = ServerName::try_from("quorum-node").expect("static name is valid");
+    let Ok(server_name) = ServerName::try_from("quorum-node") else {
+        eprintln!("[node {my_id} -> {peer_id}] internal: invalid static server name");
+        return;
+    };
     // Peers may start in any order; retry the connection briefly.
     let stream = loop {
         match TcpStream::connect(addr).await {
@@ -526,7 +571,10 @@ async fn push_dkg_to_peer(
         share,
     };
     for msg in [commitment_msg, share_msg] {
-        let mut line = serde_json::to_vec(&msg).expect("Message always serializes");
+        let Ok(mut line) = serde_json::to_vec(&msg) else {
+            eprintln!("[node {my_id} -> {peer_id}] could not serialize message; aborting push");
+            return;
+        };
         line.push(b'\n');
         if let Err(e) = tls.write_all(&line).await {
             eprintln!("[node {my_id} -> {peer_id}] write failed: {e}");
@@ -559,7 +607,13 @@ async fn handle_inbound(
             }
         };
         if let Some(response) = handle_message(&shared, msg).await {
-            let mut out = serde_json::to_vec(&response).expect("Message always serializes");
+            let Ok(mut out) = serde_json::to_vec(&response) else {
+                eprintln!(
+                    "[node {}] could not serialize response; dropping it",
+                    shared.node_id
+                );
+                continue;
+            };
             out.push(b'\n');
             write_half.write_all(&out).await?;
         }
@@ -951,7 +1005,12 @@ async fn finalize_if_ready(shared: &Arc<Shared>) {
     let old = std::mem::replace(&mut *state, NodeState::Dkg(placeholder));
     let session = match old {
         NodeState::Dkg(s) => s,
-        NodeState::Ready { .. } => unreachable!("checked ready above"),
+        ready @ NodeState::Ready { .. } => {
+            // Cannot happen (checked under the same lock above); restore and
+            // return rather than panic a running node.
+            *state = ready;
+            return;
+        }
     };
     match session.finalize() {
         Ok((secret_share, group_pks)) => {

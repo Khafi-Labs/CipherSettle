@@ -22,6 +22,17 @@
 //! innocence, per Pedersen/GJKR) is still not implemented; see the
 //! `Complaint` doc comment for exactly where that would plug in.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 use serde::{Deserialize, Serialize};
 
 pub mod bls;
@@ -63,6 +74,28 @@ use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Infallible HMAC-SHA256 constructor for a key of any length (Gap 8).
+///
+/// `Mac::new_from_slice` returns a `Result` that can never be `Err` for HMAC,
+/// but the only ways to consume it are a panic or a fallback value, and a
+/// fallback MAC/key (e.g. all zeros) would be a silent fail-open. Instead we
+/// build the 64-byte HMAC block key ourselves (RFC 2104: keys longer than the
+/// block are hashed first, shorter ones zero-padded) and use the infallible
+/// `KeyInit::new`. Byte-for-byte identical to `new_from_slice` (checked by
+/// `new_hmac_matches_new_from_slice_for_all_key_lengths`).
+fn new_hmac(key: &[u8]) -> HmacSha256 {
+    use hmac::digest::{generic_array::GenericArray, KeyInit};
+    use sha2::Digest;
+    let mut block = [0u8; 64];
+    if key.len() > block.len() {
+        let hashed = Sha256::digest(key);
+        block[..hashed.len()].copy_from_slice(&hashed);
+    } else {
+        block[..key.len()].copy_from_slice(key);
+    }
+    <HmacSha256 as KeyInit>::new(GenericArray::from_slice(&block))
+}
+
 /// A `DeriveRequest`'s authorization window is capped at this many
 /// milliseconds from issuance, checked independently by the *node*
 /// (not just trusted from the client) -- an issuer (even a
@@ -86,8 +119,8 @@ pub fn now_unix_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("clock before epoch")
-        .as_millis() as u64
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Restart-replay guard (roadmap T1-2 / TASK-009 / threat T-3).
@@ -131,8 +164,7 @@ pub fn sign_derive_auth(
     nonce: &[u8; 16],
     transport_public_key: &quorum_vetseal::TransportPublicKey,
 ) -> [u8; 32] {
-    let mut mac =
-        HmacSha256::new_from_slice(service_auth_key).expect("HMAC accepts a key of any length");
+    let mut mac = new_hmac(service_auth_key);
     mac.update(identity.as_bytes());
     mac.update(&expires_at_unix_ms.to_be_bytes());
     mac.update(nonce);
@@ -154,9 +186,7 @@ pub fn verify_derive_auth(
     transport_public_key: &quorum_vetseal::TransportPublicKey,
     mac_to_check: &[u8; 32],
 ) -> bool {
-    let Ok(mut mac) = HmacSha256::new_from_slice(service_auth_key) else {
-        return false;
-    };
+    let mut mac = new_hmac(service_auth_key);
     mac.update(identity.as_bytes());
     mac.update(&expires_at_unix_ms.to_be_bytes());
     mac.update(nonce);
@@ -189,26 +219,17 @@ pub fn derive_node_auth_key(master: &[u8], node_id: usize) -> [u8; 32] {
 /// HKDF-SHA256 (RFC 5869) producing exactly 32 bytes (a single expand block,
 /// `T(1) = HMAC(PRK, info || 0x01)`). Checked against RFC 5869 test case 1.
 pub fn hkdf_sha256_32(salt: &[u8], ikm: &[u8], info: &[u8]) -> [u8; 32] {
-    // Extract: PRK = HMAC(salt, IKM). HMAC accepts a key of any length, so
-    // these constructors cannot fail; the fallbacks keep this panic-free.
-    let prk = match HmacSha256::new_from_slice(salt) {
-        Ok(mut m) => {
-            m.update(ikm);
-            m.finalize().into_bytes()
-        }
-        Err(_) => return [0u8; 32],
-    };
-    match HmacSha256::new_from_slice(&prk) {
-        Ok(mut m) => {
-            m.update(info);
-            m.update(&[1u8]);
-            let t1 = m.finalize().into_bytes();
-            let mut out = [0u8; 32];
-            out.copy_from_slice(&t1);
-            out
-        }
-        Err(_) => [0u8; 32],
-    }
+    // Extract: PRK = HMAC(salt, IKM); Expand (one block): T(1) = HMAC(PRK, info || 0x01).
+    let mut extract = new_hmac(salt);
+    extract.update(ikm);
+    let prk = extract.finalize().into_bytes();
+    let mut expand = new_hmac(&prk);
+    expand.update(info);
+    expand.update(&[1u8]);
+    let t1 = expand.finalize().into_bytes();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&t1);
+    out
 }
 
 /// Builds a freshly-signed, freshly-nonced `DeriveRequest`, valid for
@@ -244,6 +265,23 @@ pub fn build_derive_request(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn new_hmac_matches_new_from_slice_for_all_key_lengths() {
+        use super::*;
+        for len in [0usize, 1, 31, 32, 63, 64, 65, 128, 200] {
+            let key: Vec<u8> = (0..len).map(|i| (i * 7 + 3) as u8).collect();
+            let mut a = new_hmac(&key);
+            let mut b = HmacSha256::new_from_slice(&key).unwrap();
+            a.update(b"message");
+            b.update(b"message");
+            assert_eq!(
+                a.finalize().into_bytes(),
+                b.finalize().into_bytes(),
+                "key len {len}"
+            );
+        }
+    }
+
     use super::*;
     use rand::thread_rng;
     use std::collections::BTreeMap;

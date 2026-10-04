@@ -86,9 +86,27 @@ pub struct NodeConfig {
     pub allow_ephemeral_share: bool,
 }
 
-pub fn b64_decode(s: &str) -> Vec<u8> {
+/// Decodes standard base64. Returns an error (never panics) so callers choose
+/// between a clean fatal startup error (config) and a 400 (request body).
+pub fn b64_decode(s: &str) -> Result<Vec<u8>, String> {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD
         .decode(s)
-        .expect("config contains invalid base64 -- corrupt or hand-edited config file")
+        .map_err(|e| format!("invalid base64 ({e}) -- corrupt or hand-edited input"))
+}
+
+/// Startup-only: prints `[ctx] refusing to start: <msg>` and exits 1. Used
+/// instead of `panic!`/`expect` for unusable configuration (Gap 8): no
+/// backtrace, no unwinding, an explicit non-zero exit.
+pub fn fatal(ctx: &str, msg: impl std::fmt::Display) -> ! {
+    eprintln!("[{ctx}] refusing to start: {msg}");
+    std::process::exit(1)
+}
+
+/// Startup-only: unwrap a `Result` or exit via [`fatal`].
+pub fn or_fatal<T, E: std::fmt::Display>(ctx: &str, what: &str, r: Result<T, E>) -> T {
+    match r {
+        Ok(v) => v,
+        Err(e) => fatal(ctx, format!("{what}: {e}")),
+    }
 }

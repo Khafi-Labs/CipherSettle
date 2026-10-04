@@ -37,6 +37,17 @@
 //!   is now a real `deadpool-postgres` pool; see `db.rs`'s module doc for
 //!   what each query looks like.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 mod config;
 mod db;
 mod error;
@@ -49,7 +60,7 @@ use axum::{Json, Router};
 use config::ServiceConfig;
 use error::ApiError;
 use quorum_client::collect_sealed_derived_key;
-use quorum_core::config::b64_decode;
+use quorum_core::config::{fatal, or_fatal};
 use quorum_core::PublicKeySet;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -140,8 +151,8 @@ struct AppState {
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("clock before epoch")
-        .as_millis() as u64
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Audit finding A15: this used to be a direct `HashMap::get(key)` lookup
@@ -437,7 +448,8 @@ async fn register_invoice(
     Json(req): Json<RegisterInvoiceReq>,
 ) -> Result<(StatusCode, Json<RegisterInvoiceResp>), ApiError> {
     let caller_id = authenticate(&headers, &state)?;
-    let ciphertext = b64_decode(&req.ciphertext_b64);
+    let ciphertext = b64_decode_request_field(&req.ciphertext_b64)
+        .map_err(|e| ApiError::BadRequest(format!("ciphertext_b64: invalid base64: {e}")))?;
 
     ciphersettle_core::check_payload_size(ciphertext.len(), state.max_ciphertext_bytes)
         .map_err(ApiError::BadRequest)?;
@@ -500,7 +512,9 @@ async fn register_invoice(
     let (leaf_index, root) = {
         let mut log = state.merkle_log.lock().await;
         let leaf_index = log.append(&commitment_bytes);
-        let root = log.root().expect("log has at least the leaf just appended");
+        let root = log.root().ok_or_else(|| {
+            ApiError::Internal("merkle log empty immediately after an append".to_string())
+        })?;
         (leaf_index, root)
     };
     db::set_merkle_leaf_index(&client, &req.invoice_id, leaf_index as i64).await?;
@@ -915,7 +929,9 @@ async fn get_merkle_proof(
     let proof = log.prove(leaf_index as u64).ok_or_else(|| {
         ApiError::Internal("recorded leaf_index out of range for the current log".to_string())
     })?;
-    let root = log.root().expect("log has at least this leaf");
+    let root = log.root().ok_or_else(|| {
+        ApiError::Internal("merkle log has no root despite a recorded leaf".to_string())
+    })?;
     drop(log);
 
     Ok(Json(MerkleProofResp {
@@ -1011,7 +1027,8 @@ fn hex_encode(bytes: &[u8]) -> String {
     use std::fmt::Write;
     let mut out = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        write!(out, "{b:02x}").expect("writing to a String never fails");
+        // Writing to a String cannot fail; ignoring the Ok(()) keeps this panic-free.
+        let _ = write!(out, "{b:02x}");
     }
     out
 }
@@ -1021,10 +1038,13 @@ fn b64_encode(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
-/// Unlike `quorum_core::config::b64_decode` (used for trusted, locally
-/// read config files, and panics on bad input), this returns a `Result`
-/// -- request bodies are untrusted input over HTTP and a malformed value
-/// must produce a 400, never a panic.
+/// Request bodies are untrusted input over HTTP: a malformed value must
+/// produce a 400, never a panic or a dropped connection (F-21).
+/// Startup-only decode of a base64 config field (exits cleanly on bad input).
+fn cfg_b64(field: &str, s: &str) -> Vec<u8> {
+    or_fatal("service", field, quorum_core::config::b64_decode(s))
+}
+
 fn b64_decode_request_field(s: &str) -> Result<Vec<u8>, String> {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD
@@ -1034,13 +1054,16 @@ fn b64_decode_request_field(s: &str) -> Result<Vec<u8>, String> {
 
 #[tokio::main]
 async fn main() {
-    let config_path = std::env::args()
-        .nth(1)
-        .expect("usage: quorum_service <config.json>");
+    let Some(config_path) = std::env::args().nth(1) else {
+        fatal("service", "usage: quorum_service <config.json>");
+    };
     let config: ServiceConfig = {
-        let raw = std::fs::read_to_string(&config_path)
-            .unwrap_or_else(|e| panic!("failed to read config: {e}"));
-        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("invalid config JSON: {e}"))
+        let raw = or_fatal(
+            "service",
+            "failed to read config",
+            std::fs::read_to_string(&config_path),
+        );
+        or_fatal("service", "invalid config JSON", serde_json::from_str(&raw))
     };
 
     // Audit finding A5: checked immediately after config parsing, before
@@ -1067,10 +1090,8 @@ async fn main() {
     // every concurrent request. `deadpool-postgres` manages a real pool of
     // connections (each with its own background driver task, handled
     // internally by the pool) and hands out one per checkout.
-    let pg_config: tokio_postgres::Config = config
-        .db_url
-        .parse()
-        .unwrap_or_else(|e| panic!("invalid db_url: {e}"));
+    let pg_config: tokio_postgres::Config =
+        or_fatal("service", "invalid db_url", config.db_url.parse());
     let manager = deadpool_postgres::Manager::from_config(
         pg_config,
         tokio_postgres::NoTls,
@@ -1078,19 +1099,25 @@ async fn main() {
             recycling_method: deadpool_postgres::RecyclingMethod::Fast,
         },
     );
-    let db_pool = deadpool_postgres::Pool::builder(manager)
-        .max_size(config.db_pool_max_size)
-        .build()
-        .expect("failed to build db connection pool");
+    let db_pool = or_fatal(
+        "service",
+        "failed to build db connection pool",
+        deadpool_postgres::Pool::builder(manager)
+            .max_size(config.db_pool_max_size)
+            .build(),
+    );
 
     {
-        let init_client = db_pool
-            .get()
-            .await
-            .unwrap_or_else(|e| panic!("failed to get initial db connection: {e}"));
-        db::init_schema(&init_client)
-            .await
-            .expect("failed to initialize schema");
+        let init_client = or_fatal(
+            "service",
+            "failed to get initial db connection",
+            db_pool.get().await,
+        );
+        or_fatal(
+            "service",
+            "failed to initialize schema",
+            db::init_schema(&init_client).await,
+        );
         // Cutover guard: refuse to serve a database written under a
         // different cryptographic scheme (see `db::CRYPTO_EPOCH`).
         if let Err(why) =
@@ -1117,13 +1144,16 @@ async fn main() {
     // comments for what this does and doesn't guarantee.
     let mut merkle_log = ciphersettle_core::MerkleLog::new();
     {
-        let init_client = db_pool
-            .get()
-            .await
-            .unwrap_or_else(|e| panic!("failed to get db connection for merkle rebuild: {e}"));
-        let commitments = db::commitments_in_insertion_order(&init_client)
-            .await
-            .expect("failed to load stored commitments for merkle log rebuild");
+        let init_client = or_fatal(
+            "service",
+            "failed to get db connection for merkle rebuild",
+            db_pool.get().await,
+        );
+        let commitments = or_fatal(
+            "service",
+            "failed to load stored commitments for merkle log rebuild",
+            db::commitments_in_insertion_order(&init_client).await,
+        );
         for (_, bytes) in &commitments {
             merkle_log.append(bytes);
         }
@@ -1131,23 +1161,34 @@ async fn main() {
     }
 
     let group_pks: PublicKeySet = {
-        let raw =
-            std::fs::read(&config.group_pubkey_file).expect("failed to read group public key file");
-        serde_json::from_slice(&raw).expect("group public key file is corrupt")
+        let raw = or_fatal(
+            "service",
+            "failed to read group public key file",
+            std::fs::read(&config.group_pubkey_file),
+        );
+        or_fatal(
+            "service",
+            "group public key file is corrupt",
+            serde_json::from_slice(&raw),
+        )
     };
 
     let mut allowed_certs: Vec<Vec<u8>> = config
         .quorum_nodes
         .iter()
-        .map(|n| b64_decode(&n.cert_der_b64))
+        .map(|n| cfg_b64("quorum_nodes[].cert_der_b64", &n.cert_der_b64))
         .collect();
     if let Some(notary_cert) = &config.notary_cert_der_b64 {
-        allowed_certs.push(b64_decode(notary_cert));
+        allowed_certs.push(cfg_b64("notary_cert_der_b64", notary_cert));
     }
-    let connector = quorum_client::build_connector(
-        b64_decode(&config.client_cert_der_b64),
-        b64_decode(&config.client_key_der_b64),
-        allowed_certs,
+    let connector = or_fatal(
+        "service",
+        "client TLS identity",
+        quorum_client::build_connector(
+            cfg_b64("client_cert_der_b64", &config.client_cert_der_b64),
+            cfg_b64("client_key_der_b64", &config.client_key_der_b64),
+            allowed_certs,
+        ),
     );
 
     // Audit finding A15: hash each configured key immediately at load time
@@ -1155,7 +1196,9 @@ async fn main() {
     // memory; `config` (which does hold the raw keys, read once from the
     // operator-provisioned JSON file) goes out of scope at the end of
     // `main` and is not referenced again after this point.
-    if b64_decode(&config.service_auth_key_b64).len() < quorum_core::MIN_AUTH_MASTER_BYTES {
+    if cfg_b64("service_auth_key_b64", &config.service_auth_key_b64).len()
+        < quorum_core::MIN_AUTH_MASTER_BYTES
+    {
         eprintln!(
             "[service] refusing to start: service_auth_key_b64 (the derive-auth MASTER secret, from which each node's key is derived) must decode to at least {} bytes",
             quorum_core::MIN_AUTH_MASTER_BYTES
@@ -1174,7 +1217,7 @@ async fn main() {
         api_keys,
         admin_caller_id: config.admin_caller_id.clone(),
         connector,
-        service_auth_key: b64_decode(&config.service_auth_key_b64),
+        service_auth_key: cfg_b64("service_auth_key_b64", &config.service_auth_key_b64),
         quorum_nodes: config
             .quorum_nodes
             .iter()
@@ -1217,13 +1260,22 @@ async fn main() {
 
     eprintln!("[service] listening on {}", config.listen_addr);
 
-    let listener = tokio::net::TcpListener::bind(&config.listen_addr)
-        .await
-        .expect("failed to bind");
+    let listener = or_fatal(
+        "service",
+        &format!("failed to bind {}", config.listen_addr),
+        tokio::net::TcpListener::bind(&config.listen_addr).await,
+    );
     match (&config.tls_cert_der_b64, &config.tls_key_der_b64) {
         (Some(cert_b64), Some(key_b64)) => {
             eprintln!("[service] TLS enabled");
-            let acceptor = tls_serve::build_acceptor(b64_decode(cert_b64), b64_decode(key_b64));
+            let acceptor = or_fatal(
+                "service",
+                "TLS server identity",
+                tls_serve::build_acceptor(
+                    cfg_b64("tls_cert_der_b64", cert_b64),
+                    cfg_b64("tls_key_der_b64", key_b64),
+                ),
+            );
             tls_serve::serve(app, listener, acceptor).await;
         }
         _ => {
@@ -1233,7 +1285,7 @@ async fn main() {
             // both absent means plaintext-on-loopback, the one
             // configuration that's actually allowed.
             eprintln!("[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)");
-            axum::serve(listener, app).await.expect("server error");
+            or_fatal("service", "server error", axum::serve(listener, app).await);
         }
     }
 }
