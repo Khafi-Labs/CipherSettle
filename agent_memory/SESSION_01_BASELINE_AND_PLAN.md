@@ -178,3 +178,10 @@ Failing first: `--only R` on the previous build: 0 durable holders per acknowled
 - Operator note: provision the master to the service only; run `quorum_node derive-auth-key <master_b64> <node_id>` to obtain each node's key. Master must be >= 32 bytes (service refuses to start otherwise). LIMITATION: no online rotation or key versioning.
 - LIMITATION (not closed): a compromised SERVICE holds the master and can still authorize any derivation. That is Gap 3 step 2 (signed per-request authorization). Design note written; NEEDS_HUMAN_CRYPTO_REVIEW; not implemented.
 - Next per work order: Gap 8 (panic-free lints + fuzz targets), tests first.
+
+# Session 13/14: Gap 8 (panic-free lints + parser fuzzing)
+- State recovery: the sandbox was reset twice and the uncommitted Gap 8 work of session 13 was lost the first time. Session 14 rebuilt the repo (baseline zip + 7 delta archives in order, then the session-13 edits replayed from the transcript) and COMMITTED + bundled it (`ciphersettle_repo.bundle`) before doing anything else. Sessions 9-10 are not covered by any archive.
+- Tests first: Z4 added and shown failing on unfixed code (`evidence/test_z4_before_fix_session14.log`, status 0), then the fixes. Z5 (112 hostile bodies x 7 POST routes) and fuzz group W (7 bodies) added; BOTH harnesses mutation-checked (see SECURITY_FINDINGS Gap 8). Group W initially passed a seeded bug -> structure-aware JSON mutation added.
+- Evidence: `evidence/gap8_regression_summary_session14*.txt`, `gap8_adversarial_*`, `gap8_w_100k_session14.log`.
+- Toolchain caveat: rustc 1.91.1 (distro), not the pinned 1.97; rerun CI on the pin.
+- NOT closed: coverage-guided fuzz hours (needs nightly), node state-machine fuzzing, indexing/arithmetic panic lints. Next: run `fuzz.yml` in CI; then Gap 2 (needs human cryptographer), Gap 4/5 (infrastructure), per work order.

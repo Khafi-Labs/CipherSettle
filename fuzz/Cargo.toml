@@ -1,0 +1,72 @@
+# Gap 8 / T-9: coverage-guided fuzz targets (cargo-fuzz / libFuzzer).
+# Needs a NIGHTLY toolchain and `cargo install cargo-fuzz`; it is deliberately
+# NOT a member of the main workspace (own [workspace] below) so the pinned
+# stable build, clippy and `cargo test --workspace` never see it.
+#
+#   cd fuzz && cargo +nightly fuzz run wire_message_json -- -max_total_time=3600
+#
+# Every target calls a function in src/quorum_adversarial/src/fuzz_bodies.rs --
+# the same functions the stable `quorum_adversarial --only W` driver runs in CI.
+[package]
+name = "ciphersettle-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ciphersettle_core = { path = "../src/ciphersettle_core" }
+quorum_core = { path = "../src/quorum_core" }
+quorum_audit = { path = "../src/quorum_audit" }
+ed25519-dalek = "2.1.1"
+serde_json = "1"
+
+[workspace]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "commitment_decode"
+path = "fuzz_targets/commitment_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "signature_decode"
+path = "fuzz_targets/signature_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "scalar_decode"
+path = "fuzz_targets/scalar_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "invoice_commitment_decode"
+path = "fuzz_targets/invoice_commitment_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "wire_message_json"
+path = "fuzz_targets/wire_message_json.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "merkle_proof_json"
+path = "fuzz_targets/merkle_proof_json.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "audit_log_json"
+path = "fuzz_targets/audit_log_json.rs"
+test = false
+doc = false

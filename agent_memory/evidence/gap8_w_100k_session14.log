@@ -1,0 +1,22 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+
+--- Test W: parser fuzz smoke (Gap 8 / T-9) ---
+[PASS] W1: `commitment_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=2.551184ms
+[PASS] W2: `signature_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=2.883917ms
+[PASS] W3: `scalar_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=78.629µs
+[PASS] W4: `invoice_commitment_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=345.228µs
+[PASS] W5: `wire_message_json` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=3.251794ms
+[PASS] W6: `merkle_proof_json` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=21.423058ms
+[PASS] W7: `audit_log_json` survives 100014 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=2 panics=0 slow=0 max_call=45.143651ms
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] W1: `commitment_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=2.551184ms
+  [PASS] W2: `signature_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=2.883917ms
+  [PASS] W3: `scalar_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=78.629µs
+  [PASS] W4: `invoice_commitment_decode` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=345.228µs
+  [PASS] W5: `wire_message_json` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=3.251794ms
+  [PASS] W6: `merkle_proof_json` survives 100015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=21.423058ms
+  [PASS] W7: `audit_log_json` survives 100014 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=2 panics=0 slow=0 max_call=45.143651ms
+7/7 checks passed as expected.
+rc=0

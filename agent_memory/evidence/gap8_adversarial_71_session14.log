@@ -1,0 +1,1203 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+--- Test A: malicious minority node ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9500
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9501
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9502
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9503
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9504
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 1] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 1] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 2] DKG finalized.
+[node 0] DKG finalized.
+[node 4 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 3] DKG finalized.
+[node 4] DKG finalized.
+[PASS] A0: honest baseline derive: 5-of-5 honest nodes derive successfully before any attack
+[quorum_client] node 2 sent a sealed share whose proof FAILED verification; excluded
+[PASS] A1: 1-of-5 malicious (garbage partials): correctly ignored node 2's garbage partial and derived the SAME correct key from the 4 honest nodes
+[quorum_client] node 2 sent a sealed share whose proof FAILED verification; excluded
+[PASS] A2: below-threshold honest nodes correctly refuses: correctly returned an error rather than a wrong key: only collected 2 sealed share(s), need at least 3
+
+--- Test B: below-threshold collusion ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9510
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9511
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9512
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9513
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9514
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3 -> 0] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 0] DKG finalized.
+[node 4 -> 1] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 1] DKG finalized.
+[node 2] DKG finalized.
+[PASS] B0: collected exactly T sealed shares: collected 2 (need exactly 2 for this test)
+[PASS] B1: T-of-N (below threshold) combine cannot produce a key that verifies: combining only 2 sealed shares correctly failed to produce a key that verifies against the group public key
+
+--- Test C: node-level access-control bypass (CRITICAL) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9520
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9522
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9521
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9523
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9524
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4 -> 0] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 0] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 2] DKG finalized.
+[node 1 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 1] DKG finalized.
+[node 4 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 0] REJECTED derive request for "inv-NEVER-REGISTERED-ANYWHERE-12345": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[quorum_client] node 0 rejected derive: invalid derive authorization
+[node 1] REJECTED derive request for "inv-NEVER-REGISTERED-ANYWHERE-12345": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[quorum_client] node 1 rejected derive: invalid derive authorization
+[node 2] REJECTED derive request for "inv-NEVER-REGISTERED-ANYWHERE-12345": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[quorum_client] node 2 rejected derive: invalid derive authorization
+[PASS] C: node-level bypass of quorum_service's access control: bypass correctly BLOCKED: holding the shared mTLS client cert is no longer sufficient by itself -- every node refused the request for lacking a valid service_auth_key MAC (Stage A fix for Finding 1.1): only collected 0 sealed share(s), need at least 3
+
+--- Test D: replay attack ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9530
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9531
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9532
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9533
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 1] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9534
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 1] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 1 -> 2] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 3 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 0] REJECTED derive request for "inv-adversarial-d": nonce already used (replay)
+[PASS] D: replayed derive request is rejected by single-use nonce tracking: confirmed FIXED: the first request was served normally; the byte-identical replay over a fresh TLS connection was rejected because its nonce had already been recorded as used -- Stage A closes Finding 2.1.
+
+--- Test M: sealed-share NIZK gate ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9630
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9631
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9632
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9633
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9634
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 0 -> 2] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 1 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[quorum_client] node 0 sent a sealed share whose proof FAILED verification; excluded
+[PASS] M1: NIZK gate excludes a valid-proof-for-the-wrong-key adversary BEFORE the combine, on the first round: used nodes [1, 2, 3]; adversary excluded=true; result verifies=true
+[PASS] M2: control -- with the gate OFF the same adversary poisons round 1 (proves M1 is due to the gate): used nodes [0, 1, 2]; adversary admitted=true; result rejected=true
+
+--- Test L: replay across a node restart (T1-2) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9620
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9621
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9622
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9623
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 1] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9624
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 1] DKG finalized.
+[node 0] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 3] DKG finalized.
+[node 2] DKG finalized.
+[node 3 -> 4] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[PASS] L1: the captured request is served normally by the original node process (sanity check): first response: Some(DerivePartial { from: 0, sealed_share: SealedShare(a855f12058411617..), proof: EncryptionProof(b0f6b4b409e09d31..) })
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9620
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 1] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0] REJECTED derive request for "inv-adversarial-l": predates this process's start guard (restart-replay protection)
+[PASS] L2: a request captured before the restart is NOT served after the restart: replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+[PASS] L3: the refusal comes from the restart guard (not merely from the node lacking a DKG share): replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+[PASS] L4: after the guard period a fresh request is not refused by the guard: fresh response: Some(DeriveReject { from: 0, reason: "DKG has not finalized on this node yet" }) (a 'DKG has not finalized' refusal here is expected: nodes do not persist shares)
+
+--- Test E: concurrent audit-proposer race ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9541
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9540
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9543
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9542
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9544
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 3 -> 4] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 2] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 3] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 0] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] co-signed (pending) audit entry seq 0.
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 4] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 0] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[PASS] E: concurrent audit proposers both succeed with no lost write (Stage B retry): confirmed FIXED: both concurrent proposers received Ok, and both events are actually present in the final log (["action_b", "action_a"]) with a valid, non-duplicated hash chain -- the losing proposer's retry-with-refetch absorbed the collision instead of silently dropping its event (Stage B closes Finding 1.2).
+
+--- Test I: majority tip read ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9601
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9600
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9602
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9603
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9604
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 0] DKG finalized.
+[node 4 -> 3] sent commitment + share
+[node 1] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 2] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 0] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] co-signed (pending) audit entry seq 2.
+[node 2] co-signed (pending) audit entry seq 2.
+[node 3] co-signed (pending) audit entry seq 2.
+[node 1] replicated audit entry seq 2 (3 valid co-signatures).
+[node 2] replicated audit entry seq 2 (3 valid co-signatures).
+[node 3] replicated audit entry seq 2 (3 valid co-signatures).
+[node 4] replicated audit entry seq 2 (3 valid co-signatures).
+[PASS] I: audit-log tip read tolerates node_addrs[0] being offline (Stage F fix): confirmed FIXED: with node_addrs[0] killed outright, the propose still succeeded in 351.032658ms and landed at the correct seq 2, using fetch_majority_tip's read from nodes 1-4 -- the previous hardcoded dependency on node_addrs[0] specifically is gone (Stage F closes Finding 2.2).
+
+--- Test F: mTLS penetration test ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9550
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9551
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9552
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9553
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9554
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2 -> 1] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 0] DKG finalized.
+[node 0 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 3] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 1] DKG finalized.
+[node 4] DKG finalized.
+[node 0 <- 127.0.0.1:41434] connection error: peer sent no certificates
+[PASS] F1: connection with NO client certificate is rejected: correctly rejected (either at handshake, or via a fatal alert on the first subsequent I/O -- TLS 1.3 can accept a client's Finished optimistically before the server's rejection alert arrives, so both are checked)
+[node 0 <- 127.0.0.1:41448] connection error: unexpected error: peer certificate is not in this node's pinned allow-list
+[PASS] F2: connection with a non-pinned client certificate is rejected: correctly rejected (handshake or first-I/O fatal alert)
+[PASS] F3: an oversized unterminated line from a validly-pinned peer gets the connection closed, not buffered without bound (A13): node closed the connection after 8912896 bytes sent without a '\n' terminator, as expected
+[node 0 <- 127.0.0.1:41460] connection error: wire line exceeded 8388608 bytes without a \n terminator -- closing connection (audit finding A13)
+[PASS] F3b: the node stays alive and keeps serving other connections after rejecting the oversized line: a fresh, well-behaved connection made after the attack got a real response
+
+--- Test G: HTTP penetration test ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9560
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9561
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9562
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9563
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 2] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9564
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 1] DKG finalized.
+[node 0 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 4] DKG finalized.
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 44 leaves.
+[service] listening on 127.0.0.1:9569
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[PASS] G1: request with no Authorization header: got HTTP 401 (expected 401)
+[PASS] G2: request with an unknown API key: got HTTP 401 (expected 401)
+[PASS] G3: SQL-injection-shaped path parameter is treated as inert data: got HTTP 404 (expected 404 -- not found, not a SQL error): {"error":"invoice not found"}
+[PASS] G3b: invoices table still exists after the injection attempt: confirmed table intact
+[PASS] G4: oversized ciphertext payload is rejected: got HTTP 400 (expected 400): {"error":"payload of 4000 bytes exceeds the 1024-byte limit"}
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 0] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[PASS] G5: derive-key rate limit is enforced after repeated calls: after registering + 3 rapid derive-key calls (limit 2/window), last call returned HTTP 409 (expected 409)
+
+--- Test J: sealed-share retry protocol (A12) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9580
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9581
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9582
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9583
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9584
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 1 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 1 -> 2] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 4] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 2] DKG finalized.
+[node 3] DKG finalized.
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 44 leaves.
+[service] WARNING: insecure_skip_share_proofs is set -- sealed-share NIZK verification is DISABLED. This is for the adversarial test suite only; never run a deployment this way.
+[service] listening on 127.0.0.1:9589
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 3] co-signed (pending) audit entry seq 0.
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 3] co-signed (pending) audit entry seq 1.
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[PASS] J1: the adversary lands in round 1's subset (sanity check that this test actually tests something): round 1 used nodes [0, 1, 2]
+[PASS] J2: round 1's sealed result correctly fails client-side verification (the adversary's garbage share poisoned it): correctly rejected: decrypted derived key failed verification against the group public key -- a node in this subset likely sealed a bad ciphertext; retry with a different T+1 subset
+[node 1] co-signed (pending) audit entry seq 2.
+[node 2] co-signed (pending) audit entry seq 2.
+[node 3] co-signed (pending) audit entry seq 2.
+[node 1] replicated audit entry seq 2 (3 valid co-signatures).
+[node 2] replicated audit entry seq 2 (3 valid co-signatures).
+[node 3] replicated audit entry seq 2 (3 valid co-signatures).
+[node 4] replicated audit entry seq 2 (3 valid co-signatures).
+[PASS] J3: the first retry selects a DIFFERENT node subset than round 1, not the same one again: round 1 used [0, 1, 2], first retry used [0, 1, 3]
+[node 1] co-signed (pending) audit entry seq 3.
+[node 2] co-signed (pending) audit entry seq 3.
+[node 3] co-signed (pending) audit entry seq 3.
+[node 1] replicated audit entry seq 3 (3 valid co-signatures).
+[node 2] replicated audit entry seq 3 (3 valid co-signatures).
+[node 3] replicated audit entry seq 3 (3 valid co-signatures).
+[node 4] replicated audit entry seq 3 (3 valid co-signatures).
+[node 1] co-signed (pending) audit entry seq 4.
+[node 2] co-signed (pending) audit entry seq 4.
+[node 3] co-signed (pending) audit entry seq 4.
+[node 1] replicated audit entry seq 4 (3 valid co-signatures).
+[node 2] replicated audit entry seq 4 (3 valid co-signatures).
+[node 3] replicated audit entry seq 4 (3 valid co-signatures).
+[node 4] replicated audit entry seq 4 (3 valid co-signatures).
+[node 1] co-signed (pending) audit entry seq 5.
+[node 2] co-signed (pending) audit entry seq 5.
+[node 3] co-signed (pending) audit entry seq 5.
+[node 1] replicated audit entry seq 5 (3 valid co-signatures).
+[node 2] replicated audit entry seq 5 (3 valid co-signatures).
+[node 3] replicated audit entry seq 5 (3 valid co-signatures).
+[node 4] replicated audit entry seq 5 (3 valid co-signatures).
+[node 1] co-signed (pending) audit entry seq 6.
+[node 2] co-signed (pending) audit entry seq 6.
+[node 3] co-signed (pending) audit entry seq 6.
+[node 1] replicated audit entry seq 6 (3 valid co-signatures).
+[node 2] replicated audit entry seq 6 (3 valid co-signatures).
+[node 3] replicated audit entry seq 6 (3 valid co-signatures).
+[node 4] replicated audit entry seq 6 (3 valid co-signatures).
+[node 1] co-signed (pending) audit entry seq 7.
+[node 2] co-signed (pending) audit entry seq 7.
+[node 3] co-signed (pending) audit entry seq 7.
+[node 1] replicated audit entry seq 7 (3 valid co-signatures).
+[node 2] replicated audit entry seq 7 (3 valid co-signatures).
+[node 3] replicated audit entry seq 7 (3 valid co-signatures).
+[node 4] replicated audit entry seq 7 (3 valid co-signatures).
+[PASS] J4: retrying automatically recovers within the guaranteed bound (at most 9 failed retries for this quorum shape), without any human manually intervening beyond following the documented protocol: recovered after 6 retry round(s) following the initial failure
+[node 1] co-signed (pending) audit entry seq 8.
+[node 2] co-signed (pending) audit entry seq 8.
+[node 3] co-signed (pending) audit entry seq 8.
+[node 1] replicated audit entry seq 8 (3 valid co-signatures).
+[node 2] replicated audit entry seq 8 (3 valid co-signatures).
+[node 3] replicated audit entry seq 8 (3 valid co-signatures).
+[node 4] replicated audit entry seq 8 (3 valid co-signatures).
+[PASS] J5: once every subset has been reported as tried, the service returns a clear terminal failure (409), not a fabricated success: got HTTP 409 (expected 409): {"error":"every reachable 3-node combination has already been tried and failed (10 tried) -- likely more than this quorum's fault-tolerance budget of bad nodes for this request"}
+
+--- Test K: TLS termination (A5) ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9591
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9590
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9592
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9593
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2 -> 1] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9594
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 2] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 1 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 1 -> 0] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 3] DKG finalized.
+[node 4] DKG finalized.
+[PASS] K1: quorum_service refuses to start when configured off-loopback without TLS: process exited: true, port never became connectable: true
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 45 leaves.
+[service] listening on 127.0.0.1:19598
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[PASS] K2: plaintext loopback still works (backward compatible): connected: true
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 45 leaves.
+[service] listening on 127.0.0.1:19597
+[service] TLS enabled
+[service] TLS handshake failed from 127.0.0.1:51036: tls handshake eof
+[PASS] K3a: quorum_service with TLS configured completes a real TLS handshake: handshake result: OK
+[PASS] K3b: the TLS-wrapped connection actually carries a real HTTP response: first bytes: Some("HTTP/1.1 404 Not Found")
+[service] TLS handshake failed from 127.0.0.1:51046: received corrupt message of type InvalidContentType
+[PASS] K3c: a plaintext (non-TLS) request against the TLS port does NOT get a plaintext HTTP response: got 7 bytes back, looked like plaintext HTTP: false
+
+--- Test N: crypto cutover guard ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9640
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9641
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9642
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9643
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9644
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3 -> 2] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 0 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 0 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 1] DKG finalized.
+[node 3 -> 4] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 0 leaves.
+[service] listening on 127.0.0.1:19610
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[PASS] N0: an empty database is stamped with the current crypto epoch and the service starts: started: true, marker after start: Some("blstrs-rfc9380-v1")
+[service] connecting to Postgres (pooled)...
+[service] REFUSING TO START (crypto cutover guard): database holds 1 invoice(s) but no crypto-epoch marker, so they pre-date the blstrs cutover and their ciphertexts cannot be opened with keys from the current quorum. Purge or re-encrypt them, then set `acknowledge_pre_cutover_data: true` once to stamp the database as "blstrs-rfc9380-v1".
+[PASS] N1: a database with invoices but no crypto-epoch marker is refused (pre-cutover data): seed ok: true, service started: false, marker written: None
+[service] connecting to Postgres (pooled)...
+[service] REFUSING TO START (crypto cutover guard): database is stamped with crypto epoch "threshold_crypto-legacy" but this build is "blstrs-rfc9380-v1": keys derived under the stamped scheme are not compatible. Migrate or purge the data explicitly; there is deliberately no override for a mismatched marker.
+[PASS] N2: a mismatched epoch marker is refused even with the acknowledgement set: service started: false, marker left as: Some("threshold_crypto-legacy")
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 0 leaves.
+[service] listening on 127.0.0.1:19613
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[PASS] N3: control -- identical pre-cutover state starts and is stamped once explicitly acknowledged: service started: true, marker after start: Some("blstrs-rfc9380-v1")
+
+--- Test Z: service audit semantics (F-13/F-14) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9800
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9801
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9802
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2 -> 0] sent commitment + share
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9803
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9804
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 1] DKG finalized.
+[node 0] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 2] DKG finalized.
+[node 4] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 45 leaves.
+[service] listening on 127.0.0.1:9809
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 3] co-signed (pending) audit entry seq 0.
+[node 4] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[service] AUDIT PENDING outbox_id=52 action=invoice_registered invoice=z2-1791108494362218672 attempts=1: audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt (a competing proposal holds the vote slots; they free on commit or after the vote TTL)
+[PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change): split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+[PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record: invoice_row_exists=true outbox_status=Ok(Some("pending"))
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[service] AUDIT PENDING outbox_id=52 action=invoice_registered invoice=z2-1791108494362218672 attempts=2: audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt (a competing proposal holds the vote slots; they free on commit or after the vote TTL)
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence): drained=true entries_for_invoice=1 chain_ok=true after=7264ms
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 0] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 2.
+[node 1] co-signed (pending) audit entry seq 2.
+[node 2] co-signed (pending) audit entry seq 2.
+[node 0] replicated audit entry seq 2 (3 valid co-signatures).
+[node 1] replicated audit entry seq 2 (3 valid co-signatures).
+[node 2] replicated audit entry seq 2 (3 valid co-signatures).
+[node 3] replicated audit entry seq 2 (3 valid co-signatures).
+[node 4] replicated audit entry seq 2 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 3.
+[node 1] co-signed (pending) audit entry seq 3.
+[node 2] co-signed (pending) audit entry seq 3.
+[node 0] replicated audit entry seq 3 (3 valid co-signatures).
+[node 1] replicated audit entry seq 3 (3 valid co-signatures).
+[node 2] replicated audit entry seq 3 (3 valid co-signatures).
+[node 3] replicated audit entry seq 3 (3 valid co-signatures).
+[node 4] replicated audit entry seq 3 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 4.
+[node 1] co-signed (pending) audit entry seq 4.
+[node 2] co-signed (pending) audit entry seq 4.
+[node 0] replicated audit entry seq 4 (3 valid co-signatures).
+[node 1] replicated audit entry seq 4 (3 valid co-signatures).
+[node 2] replicated audit entry seq 4 (3 valid co-signatures).
+[node 3] replicated audit entry seq 4 (3 valid co-signatures).
+[node 4] replicated audit entry seq 4 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 5.
+[node 1] co-signed (pending) audit entry seq 5.
+[node 2] co-signed (pending) audit entry seq 5.
+[node 0] replicated audit entry seq 5 (3 valid co-signatures).
+[node 1] replicated audit entry seq 5 (3 valid co-signatures).
+[node 2] replicated audit entry seq 5 (3 valid co-signatures).
+[node 3] replicated audit entry seq 5 (3 valid co-signatures).
+[node 4] replicated audit entry seq 5 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 6.
+[node 1] co-signed (pending) audit entry seq 6.
+[node 2] co-signed (pending) audit entry seq 6.
+[node 0] replicated audit entry seq 6 (3 valid co-signatures).
+[node 1] replicated audit entry seq 6 (3 valid co-signatures).
+[node 2] replicated audit entry seq 6 (3 valid co-signatures).
+[node 3] replicated audit entry seq 6 (3 valid co-signatures).
+[node 4] replicated audit entry seq 6 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 7.
+[node 1] co-signed (pending) audit entry seq 7.
+[node 2] co-signed (pending) audit entry seq 7.
+[node 0] replicated audit entry seq 7 (3 valid co-signatures).
+[node 1] replicated audit entry seq 7 (3 valid co-signatures).
+[node 2] replicated audit entry seq 7 (3 valid co-signatures).
+[node 3] replicated audit entry seq 7 (3 valid co-signatures).
+[node 4] replicated audit entry seq 7 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 8.
+[node 1] co-signed (pending) audit entry seq 8.
+[node 2] co-signed (pending) audit entry seq 8.
+[node 0] replicated audit entry seq 8 (3 valid co-signatures).
+[node 1] replicated audit entry seq 8 (3 valid co-signatures).
+[node 2] replicated audit entry seq 8 (3 valid co-signatures).
+[node 3] replicated audit entry seq 8 (3 valid co-signatures).
+[node 4] replicated audit entry seq 8 (3 valid co-signatures).
+[PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention): statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+[PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate): pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+[PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table): invoices_without_outbox_record=0
+[node 0] co-signed (pending) audit entry seq 9.
+[node 1] co-signed (pending) audit entry seq 9.
+[node 2] co-signed (pending) audit entry seq 9.
+[node 0] replicated audit entry seq 9 (3 valid co-signatures).
+[node 1] replicated audit entry seq 9 (3 valid co-signatures).
+[node 2] replicated audit entry seq 9 (3 valid co-signatures).
+[node 3] replicated audit entry seq 9 (3 valid co-signatures).
+[node 4] replicated audit entry seq 9 (3 valid co-signatures).
+[PASS] Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving: bad_status=400 body="{\"error\":\"ciphertext_b64: invalid base64: Invalid symbol 33, offset 0.\"}" next_valid_status=201
+[node 0] co-signed (pending) audit entry seq 10.
+[node 1] co-signed (pending) audit entry seq 10.
+[node 2] co-signed (pending) audit entry seq 10.
+[node 0] replicated audit entry seq 10 (3 valid co-signatures).
+[node 1] replicated audit entry seq 10 (3 valid co-signatures).
+[node 2] replicated audit entry seq 10 (3 valid co-signatures).
+[node 3] replicated audit entry seq 10 (3 valid co-signatures).
+[node 4] replicated audit entry seq 10 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 11.
+[node 1] co-signed (pending) audit entry seq 11.
+[node 2] co-signed (pending) audit entry seq 11.
+[node 0] replicated audit entry seq 11 (3 valid co-signatures).
+[node 1] replicated audit entry seq 11 (3 valid co-signatures).
+[node 2] replicated audit entry seq 11 (3 valid co-signatures).
+[node 3] replicated audit entry seq 11 (3 valid co-signatures).
+[node 4] replicated audit entry seq 11 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 12.
+[node 1] co-signed (pending) audit entry seq 12.
+[node 2] co-signed (pending) audit entry seq 12.
+[node 0] replicated audit entry seq 12 (3 valid co-signatures).
+[node 1] replicated audit entry seq 12 (3 valid co-signatures).
+[node 2] replicated audit entry seq 12 (3 valid co-signatures).
+[node 3] replicated audit entry seq 12 (3 valid co-signatures).
+[node 4] replicated audit entry seq 12 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 13.
+[node 1] co-signed (pending) audit entry seq 13.
+[node 2] co-signed (pending) audit entry seq 13.
+[node 0] replicated audit entry seq 13 (3 valid co-signatures).
+[node 1] replicated audit entry seq 13 (3 valid co-signatures).
+[node 2] replicated audit entry seq 13 (3 valid co-signatures).
+[node 3] replicated audit entry seq 13 (3 valid co-signatures).
+[node 4] replicated audit entry seq 13 (3 valid co-signatures).
+[PASS] Z5: 112 malformed/hostile JSON bodies across all 7 POST routes never cause a 5xx or dropped connection, and the service still serves afterwards: requests=112 bad=[] next_valid_status=201
+
+--- Test P: key-share persistence across restart (Gap 1) ---
+[PASS] P1: after the ceremony every node has persisted an encrypted share file and a derive works: share files present=true derive_ok=true
+[PASS] P2: group public key is UNCHANGED after stopping and restarting every node: identical on all 5 nodes = true
+[PASS] P3: a pre-restart invoice key is still derivable and is byte-identical (verifies against the ORIGINAL group key): before_some=true after_some=true
+[PASS] P8: no node log or share file contains any node's KEK (hex or base64): nodes with a hit: []
+[PASS] P4: a node with a CORRUPTED share file refuses to start (non-zero exit, no ready/pubkey output, no DKG): exit status: 2; no outputs written=true
+[PASS] P5: a node with a MISSING share file (and no ceremony switch) refuses to start instead of re-running DKG: exit status: 2; no ready file=true
+[PASS] P6: a node whose KEK cannot decrypt its share file refuses to start: exit status: 2
+[PASS] P7: init_ceremony=true with an existing share file is refused and the share file is left untouched: exit status: 2; share file unchanged=true
+[PASS] P9: a config with no `persistence` and no explicit allow_ephemeral_share refuses to start (fail closed): exit status: 2
+
+--- Test Q: audit-log durability (Gap 13) ---
+[PASS] Q1: after SIGKILL of every node, each audit-log file parses, its hash chain verifies, and it holds all committed entries: appended=6 per_node=[Ok(6), Ok(6), Ok(6), Ok(6), Ok(6)]
+[PASS] Q2: after restarting from the persisted files the majority tip is intact and a new entry lands at seq 6: tip_len=Ok(6) next=Ok(6)
+[quorum_client] node 1 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 2 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 3 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 4 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 1 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 2 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 3 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 4 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 1 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 2 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 3 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 4 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 1 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 2 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 3 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 4 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 1 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 2 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 3 rejected audit append: entry seq 10 does not extend this log's current length 9
+[quorum_client] node 4 rejected audit append: entry seq 10 does not extend this log's current length 9
+[PASS] Q3: 3 rounds of SIGKILL in the middle of an append burst never leave a corrupt or truncated audit log, and the cluster restarts every time: round 0: killed after 215ms lens=[Ok(8), Ok(8), Ok(8), Ok(8), Ok(8)] | round 1: killed after 271ms lens=[Ok(10), Ok(9), Ok(9), Ok(9), Ok(9)] | round 2: killed after 536ms lens=[Ok(10), Ok(9), Ok(9), Ok(9), Ok(9)]
+[PASS] Q4: a garbage audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log: exit_nonzero=true (exit status: 2) ready_file_written=false error_mentions_audit_log=true
+[PASS] Q5: a truncated audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log: exit_nonzero=true (exit status: 2) ready_file_written=false error_mentions_audit_log=true
+[PASS] Q6: an audit log whose hash chain was tampered with makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log: exit_nonzero=true (exit status: 2) ready_file_written=false error_mentions_audit_log=true
+
+--- Test R: acknowledged => durable (F-19) ---
+[PASS] R: after propose returns Ok and every node is SIGKILLed immediately, the entry is on disk on at least t+1 nodes (every round): acked_rounds=8/8 min_durable_holders=5 (need >= 3) [r0:5 r1:5 r2:5 r3:5 r4:5 r5:5 r6:5 r7:5]
+
+--- Test S: leaked single-node auth key (Gap 3 step 1) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9830
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9831
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9832
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9833
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9834
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 2] DKG finalized.
+[node 1 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 1] REJECTED derive request for "inv-never-registered-anywhere": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[node 2] REJECTED derive request for "inv-never-registered-anywhere": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[node 3] REJECTED derive request for "inv-never-registered-anywhere": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[node 4] REJECTED derive request for "inv-never-registered-anywhere": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[PASS] S1: a request forged with ONE node's leaked key is accepted by that node only (fewer than t+1 partials, no derivation possible): nodes that served the forged request: [0] (need 3 to derive)
+
+--- Test W: parser fuzz smoke (Gap 8 / T-9) ---
+[PASS] W1: `commitment_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=2.346571ms
+[PASS] W2: `signature_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=1.85251ms
+[PASS] W3: `scalar_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=47.84µs
+[PASS] W4: `invoice_commitment_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=44.394µs
+[PASS] W5: `wire_message_json` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=382.605µs
+[PASS] W6: `merkle_proof_json` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=3 panics=0 slow=0 max_call=21.33125ms
+[PASS] W7: `audit_log_json` survives 20014 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip: seeds=2 panics=0 slow=0 max_call=44.93836ms
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] A0: honest baseline derive -- 5-of-5 honest nodes derive successfully before any attack
+  [PASS] A1: 1-of-5 malicious (garbage partials) -- correctly ignored node 2's garbage partial and derived the SAME correct key from the 4 honest nodes
+  [PASS] A2: below-threshold honest nodes correctly refuses -- correctly returned an error rather than a wrong key: only collected 2 sealed share(s), need at least 3
+  [PASS] B0: collected exactly T sealed shares -- collected 2 (need exactly 2 for this test)
+  [PASS] B1: T-of-N (below threshold) combine cannot produce a key that verifies -- combining only 2 sealed shares correctly failed to produce a key that verifies against the group public key
+  [PASS] C: node-level bypass of quorum_service's access control -- bypass correctly BLOCKED: holding the shared mTLS client cert is no longer sufficient by itself -- every node refused the request for lacking a valid service_auth_key MAC (Stage A fix for Finding 1.1): only collected 0 sealed share(s), need at least 3
+  [PASS] D: replayed derive request is rejected by single-use nonce tracking -- confirmed FIXED: the first request was served normally; the byte-identical replay over a fresh TLS connection was rejected because its nonce had already been recorded as used -- Stage A closes Finding 2.1.
+  [PASS] M1: NIZK gate excludes a valid-proof-for-the-wrong-key adversary BEFORE the combine, on the first round -- used nodes [1, 2, 3]; adversary excluded=true; result verifies=true
+  [PASS] M2: control -- with the gate OFF the same adversary poisons round 1 (proves M1 is due to the gate) -- used nodes [0, 1, 2]; adversary admitted=true; result rejected=true
+  [PASS] L1: the captured request is served normally by the original node process (sanity check) -- first response: Some(DerivePartial { from: 0, sealed_share: SealedShare(a855f12058411617..), proof: EncryptionProof(b0f6b4b409e09d31..) })
+  [PASS] L2: a request captured before the restart is NOT served after the restart -- replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+  [PASS] L3: the refusal comes from the restart guard (not merely from the node lacking a DKG share) -- replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+  [PASS] L4: after the guard period a fresh request is not refused by the guard -- fresh response: Some(DeriveReject { from: 0, reason: "DKG has not finalized on this node yet" }) (a 'DKG has not finalized' refusal here is expected: nodes do not persist shares)
+  [PASS] E: concurrent audit proposers both succeed with no lost write (Stage B retry) -- confirmed FIXED: both concurrent proposers received Ok, and both events are actually present in the final log (["action_b", "action_a"]) with a valid, non-duplicated hash chain -- the losing proposer's retry-with-refetch absorbed the collision instead of silently dropping its event (Stage B closes Finding 1.2).
+  [PASS] I: audit-log tip read tolerates node_addrs[0] being offline (Stage F fix) -- confirmed FIXED: with node_addrs[0] killed outright, the propose still succeeded in 351.032658ms and landed at the correct seq 2, using fetch_majority_tip's read from nodes 1-4 -- the previous hardcoded dependency on node_addrs[0] specifically is gone (Stage F closes Finding 2.2).
+  [PASS] F1: connection with NO client certificate is rejected -- correctly rejected (either at handshake, or via a fatal alert on the first subsequent I/O -- TLS 1.3 can accept a client's Finished optimistically before the server's rejection alert arrives, so both are checked)
+  [PASS] F2: connection with a non-pinned client certificate is rejected -- correctly rejected (handshake or first-I/O fatal alert)
+  [PASS] F3: an oversized unterminated line from a validly-pinned peer gets the connection closed, not buffered without bound (A13) -- node closed the connection after 8912896 bytes sent without a '\n' terminator, as expected
+  [PASS] F3b: the node stays alive and keeps serving other connections after rejecting the oversized line -- a fresh, well-behaved connection made after the attack got a real response
+  [PASS] G1: request with no Authorization header -- got HTTP 401 (expected 401)
+  [PASS] G2: request with an unknown API key -- got HTTP 401 (expected 401)
+  [PASS] G3: SQL-injection-shaped path parameter is treated as inert data -- got HTTP 404 (expected 404 -- not found, not a SQL error): {"error":"invoice not found"}
+  [PASS] G3b: invoices table still exists after the injection attempt -- confirmed table intact
+  [PASS] G4: oversized ciphertext payload is rejected -- got HTTP 400 (expected 400): {"error":"payload of 4000 bytes exceeds the 1024-byte limit"}
+  [PASS] G5: derive-key rate limit is enforced after repeated calls -- after registering + 3 rapid derive-key calls (limit 2/window), last call returned HTTP 409 (expected 409)
+  [PASS] J1: the adversary lands in round 1's subset (sanity check that this test actually tests something) -- round 1 used nodes [0, 1, 2]
+  [PASS] J2: round 1's sealed result correctly fails client-side verification (the adversary's garbage share poisoned it) -- correctly rejected: decrypted derived key failed verification against the group public key -- a node in this subset likely sealed a bad ciphertext; retry with a different T+1 subset
+  [PASS] J3: the first retry selects a DIFFERENT node subset than round 1, not the same one again -- round 1 used [0, 1, 2], first retry used [0, 1, 3]
+  [PASS] J4: retrying automatically recovers within the guaranteed bound (at most 9 failed retries for this quorum shape), without any human manually intervening beyond following the documented protocol -- recovered after 6 retry round(s) following the initial failure
+  [PASS] J5: once every subset has been reported as tried, the service returns a clear terminal failure (409), not a fabricated success -- got HTTP 409 (expected 409): {"error":"every reachable 3-node combination has already been tried and failed (10 tried) -- likely more than this quorum's fault-tolerance budget of bad nodes for this request"}
+  [PASS] K1: quorum_service refuses to start when configured off-loopback without TLS -- process exited: true, port never became connectable: true
+  [PASS] K2: plaintext loopback still works (backward compatible) -- connected: true
+  [PASS] K3a: quorum_service with TLS configured completes a real TLS handshake -- handshake result: OK
+  [PASS] K3b: the TLS-wrapped connection actually carries a real HTTP response -- first bytes: Some("HTTP/1.1 404 Not Found")
+  [PASS] K3c: a plaintext (non-TLS) request against the TLS port does NOT get a plaintext HTTP response -- got 7 bytes back, looked like plaintext HTTP: false
+  [PASS] N0: an empty database is stamped with the current crypto epoch and the service starts -- started: true, marker after start: Some("blstrs-rfc9380-v1")
+  [PASS] N1: a database with invoices but no crypto-epoch marker is refused (pre-cutover data) -- seed ok: true, service started: false, marker written: None
+  [PASS] N2: a mismatched epoch marker is refused even with the acknowledgement set -- service started: false, marker left as: Some("threshold_crypto-legacy")
+  [PASS] N3: control -- identical pre-cutover state starts and is stamped once explicitly acknowledged -- service started: true, marker after start: Some("blstrs-rfc9380-v1")
+  [PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change) -- split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+  [PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record -- invoice_row_exists=true outbox_status=Ok(Some("pending"))
+  [PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence) -- drained=true entries_for_invoice=1 chain_ok=true after=7264ms
+  [PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention) -- statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+  [PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate) -- pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+  [PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table) -- invoices_without_outbox_record=0
+  [PASS] Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving -- bad_status=400 body="{\"error\":\"ciphertext_b64: invalid base64: Invalid symbol 33, offset 0.\"}" next_valid_status=201
+  [PASS] Z5: 112 malformed/hostile JSON bodies across all 7 POST routes never cause a 5xx or dropped connection, and the service still serves afterwards -- requests=112 bad=[] next_valid_status=201
+  [PASS] P1: after the ceremony every node has persisted an encrypted share file and a derive works -- share files present=true derive_ok=true
+  [PASS] P2: group public key is UNCHANGED after stopping and restarting every node -- identical on all 5 nodes = true
+  [PASS] P3: a pre-restart invoice key is still derivable and is byte-identical (verifies against the ORIGINAL group key) -- before_some=true after_some=true
+  [PASS] P8: no node log or share file contains any node's KEK (hex or base64) -- nodes with a hit: []
+  [PASS] P4: a node with a CORRUPTED share file refuses to start (non-zero exit, no ready/pubkey output, no DKG) -- exit status: 2; no outputs written=true
+  [PASS] P5: a node with a MISSING share file (and no ceremony switch) refuses to start instead of re-running DKG -- exit status: 2; no ready file=true
+  [PASS] P6: a node whose KEK cannot decrypt its share file refuses to start -- exit status: 2
+  [PASS] P7: init_ceremony=true with an existing share file is refused and the share file is left untouched -- exit status: 2; share file unchanged=true
+  [PASS] P9: a config with no `persistence` and no explicit allow_ephemeral_share refuses to start (fail closed) -- exit status: 2
+  [PASS] Q1: after SIGKILL of every node, each audit-log file parses, its hash chain verifies, and it holds all committed entries -- appended=6 per_node=[Ok(6), Ok(6), Ok(6), Ok(6), Ok(6)]
+  [PASS] Q2: after restarting from the persisted files the majority tip is intact and a new entry lands at seq 6 -- tip_len=Ok(6) next=Ok(6)
+  [PASS] Q3: 3 rounds of SIGKILL in the middle of an append burst never leave a corrupt or truncated audit log, and the cluster restarts every time -- round 0: killed after 215ms lens=[Ok(8), Ok(8), Ok(8), Ok(8), Ok(8)] | round 1: killed after 271ms lens=[Ok(10), Ok(9), Ok(9), Ok(9), Ok(9)] | round 2: killed after 536ms lens=[Ok(10), Ok(9), Ok(9), Ok(9), Ok(9)]
+  [PASS] Q4: a garbage audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log -- exit_nonzero=true (exit status: 2) ready_file_written=false error_mentions_audit_log=true
+  [PASS] Q5: a truncated audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log -- exit_nonzero=true (exit status: 2) ready_file_written=false error_mentions_audit_log=true
+  [PASS] Q6: an audit log whose hash chain was tampered with makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log -- exit_nonzero=true (exit status: 2) ready_file_written=false error_mentions_audit_log=true
+  [PASS] R: after propose returns Ok and every node is SIGKILLed immediately, the entry is on disk on at least t+1 nodes (every round) -- acked_rounds=8/8 min_durable_holders=5 (need >= 3) [r0:5 r1:5 r2:5 r3:5 r4:5 r5:5 r6:5 r7:5]
+  [PASS] S1: a request forged with ONE node's leaked key is accepted by that node only (fewer than t+1 partials, no derivation possible) -- nodes that served the forged request: [0] (need 3 to derive)
+  [PASS] W1: `commitment_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=2.346571ms
+  [PASS] W2: `signature_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=1.85251ms
+  [PASS] W3: `scalar_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=47.84µs
+  [PASS] W4: `invoice_commitment_decode` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=44.394µs
+  [PASS] W5: `wire_message_json` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=382.605µs
+  [PASS] W6: `merkle_proof_json` survives 20015 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=3 panics=0 slow=0 max_call=21.33125ms
+  [PASS] W7: `audit_log_json` survives 20014 inputs (random + mutated valid seeds + structural corpus) with no panic, no slow call, canonical round-trip -- seeds=2 panics=0 slow=0 max_call=44.93836ms
+71/71 checks passed as expected.

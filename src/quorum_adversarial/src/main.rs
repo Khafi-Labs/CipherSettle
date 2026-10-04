@@ -89,6 +89,9 @@ fn sample_commitment_b64(invoice_reference: &str) -> String {
     b64(&commitment.to_bytes())
 }
 
+mod fuzz_bodies;
+mod fuzz_smoke;
+
 struct Report {
     results: Vec<(String, bool, String)>,
 }
@@ -1303,6 +1306,55 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
         "Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving",
         st_bad == 400 && (st_ok == 201 || st_ok == 202),
         format!("bad_status={st_bad} body={body_bad:?} next_valid_status={st_ok}"),
+    );
+
+    // ---- Z5 (Gap 8 / T-9): malformed-body sweep over every POST route. No
+    // response may be a 5xx or a dropped connection (status 0); the service
+    // must still serve a valid request afterwards.
+    let sweep_id = format!("z4-ok-{run_id}");
+    let routes = [
+        "/invoices".to_string(),
+        format!("/invoices/{sweep_id}/grant"),
+        format!("/invoices/{sweep_id}/revoke"),
+        format!("/invoices/{sweep_id}/settle"),
+        format!("/invoices/{sweep_id}/prune"),
+        format!("/invoices/{sweep_id}/derive-key"),
+        "/regulators".to_string(),
+    ];
+    let bodies: Vec<String> = vec![
+        String::new(),
+        "{}".into(),
+        "[]".into(),
+        "null".into(),
+        "\"x\"".into(),
+        "{\"a\":".into(),
+        "\u{0}".into(),
+        "{\"invoice_id\":1,\"nullifier_hash\":null,\"ciphertext_b64\":[],\"commitment_b64\":{}}".into(),
+        "{\"invoice_id\":\"x\",\"nullifier_hash\":\"y\",\"ciphertext_b64\":\"\",\"commitment_b64\":\"\"}".into(),
+        "{\"bank\":18446744073709551616,\"principal\":-1}".into(),
+        "{\"transport_public_key_b64\":\"!!!\"}".into(),
+        "{\"transport_public_key_b64\":\"AAAA\",\"used_node_ids\":[18446744073709551615,-1,null]}".into(),
+        format!("{{\"bank\":\"{}\",\"principal\":\"{}\"}}", "A".repeat(1 << 20), "B".repeat(1 << 16)),
+        format!("{}{}", "[".repeat(5000), "]".repeat(5000)),
+        "\u{feff}{\"bank\":\"x\"}".into(),
+        "{\"invoice_id\":\"z5-b64\",\"nullifier_hash\":\"n\",\"ciphertext_b64\":\"!!!\",\"commitment_b64\":\"!!!\"}".into(),
+    ];
+    let mut sweep_bad: Vec<String> = Vec::new();
+    let mut sweep_n = 0usize;
+    for r in &routes {
+        for b in &bodies {
+            sweep_n += 1;
+            let (st, _) = http_json(&service_addr, "POST", r, Some(key), Some(b)).await;
+            if st == 0 || st >= 500 {
+                sweep_bad.push(format!("{r} body_len={} -> {st}", b.len()));
+            }
+        }
+    }
+    let (st_after, _) = post_invoice(format!("z5-after-{run_id}")).await;
+    report.record(
+        "Z5: 112 malformed/hostile JSON bodies across all 7 POST routes never cause a 5xx or dropped connection, and the service still serves afterwards",
+        sweep_bad.is_empty() && sweep_n == 112 && (st_after == 201 || st_after == 202),
+        format!("requests={sweep_n} bad={sweep_bad:?} next_valid_status={st_after}"),
     );
 
     let _ = service_child.kill();
@@ -3641,6 +3693,19 @@ async fn main() {
     if want('S') {
         println!("\n--- Test S: leaked single-node auth key (Gap 3 step 1) ---");
         test_s_leaked_node_key_is_contained(&mut report).await;
+    }
+    if want('W') {
+        println!("\n--- Test W: parser fuzz smoke (Gap 8 / T-9) ---");
+        let iters: Option<usize> = {
+            let args: Vec<String> = std::env::args().collect();
+            args.iter()
+                .position(|a| a == "--fuzz-iters")
+                .and_then(|i| args.get(i + 1))
+                .and_then(|v| v.parse().ok())
+        };
+        for o in fuzz_smoke::run(iters) {
+            report.record(&o.name, o.passed, o.notes);
+        }
     }
     if want('H') {
         println!("\n--- Test H: real network partition ---");

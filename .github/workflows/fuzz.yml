@@ -1,0 +1,45 @@
+# Gap 8 / T-9: scheduled coverage-guided fuzzing (libFuzzer via cargo-fuzz).
+# Nightly toolchain on purpose (cargo-fuzz needs -Z flags); this is separate
+# from the pinned-stable CI so it can never affect the release build.
+# STATUS: written in a sandbox without nightly access -- NOT yet executed in CI.
+# The same bodies run on stable on every push via `quorum_adversarial --only W`.
+name: fuzz
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds: { description: "seconds per target", default: "600" }
+  schedule:
+    - cron: "17 3 * * 0"   # weekly, Sunday 03:17 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - commitment_decode
+          - signature_decode
+          - scalar_decode
+          - invoice_commitment_decode
+          - wire_message_json
+          - merkle_proof_json
+          - audit_log_json
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: rustup toolchain install nightly --profile minimal && rustup default nightly
+      - run: cargo install cargo-fuzz --locked
+      - name: Fuzz ${{ matrix.target }}
+        working-directory: fuzz
+        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=${{ github.event.inputs.seconds || '600' }} -rss_limit_mb=2048
+      - name: Keep crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/

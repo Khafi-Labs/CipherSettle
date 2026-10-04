@@ -1,0 +1,13 @@
+pin=0
+fmt=0
+clippy=101
+build=0 warnings=0
+test=0
+passed 156 failed 0
+assert=0
+adv=0
+71/71 checks passed as expected.
+END
+# After this run a type-alias-only edit (clippy::type_complexity in fuzz_bodies.rs) was made; re-verified:
+# clippy --workspace -D warnings rc=0, fmt --check rc=0, pin policy rc=0, fuzz/ cargo check rc=0, W smoke 7/7.
+# Toolchain: rustc 1.91.1 (NOT the pinned 1.97). Orchestrator e2e + bad-config checks: run in session 13 (rc=0), not re-run in 14.
