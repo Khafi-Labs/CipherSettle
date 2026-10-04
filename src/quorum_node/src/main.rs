@@ -45,6 +45,7 @@
 )]
 mod audit_store;
 mod bounded_line_reader;
+mod powerloss;
 mod share_store;
 mod tls;
 
@@ -283,6 +284,36 @@ async fn main() {
                 .encode(quorum_core::derive_node_auth_key(&master, id))
         );
         return;
+    }
+    // Gap 13 power-loss rehearsal tools (see powerloss.rs and VERIFICATION_RUNBOOK.md).
+    match std::env::args().nth(1).as_deref() {
+        Some("audit-powerloss-workload") => {
+            let (Some(log), Some(ack)) = (std::env::args().nth(2), std::env::args().nth(3)) else {
+                fatal("usage: quorum_node audit-powerloss-workload <log_file> <ack_file> [max_entries]");
+            };
+            let max = std::env::args().nth(4).and_then(|v| v.parse::<u64>().ok());
+            match powerloss::workload(Path::new(&log), Path::new(&ack), max) {
+                Ok(()) => return,
+                Err(e) => fatal(&e),
+            }
+        }
+        Some("audit-powerloss-verify") => {
+            let Some(log) = std::env::args().nth(2) else {
+                fatal("usage: quorum_node audit-powerloss-verify <log_file> [ack_file]");
+            };
+            let ack = std::env::args().nth(3);
+            match powerloss::verify(Path::new(&log), ack.as_deref().map(Path::new)) {
+                Ok(msg) => {
+                    println!("{msg}");
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("FAIL: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        _ => {}
     }
     let Some(config_path) = std::env::args().nth(1) else {
         fatal("usage: quorum_node <config.json>");

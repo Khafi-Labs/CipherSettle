@@ -89,6 +89,8 @@ fn sample_commitment_b64(invoice_reference: &str) -> String {
     b64(&commitment.to_bytes())
 }
 
+#[cfg(test)]
+mod corpus_tests;
 mod fuzz_bodies;
 mod fuzz_smoke;
 

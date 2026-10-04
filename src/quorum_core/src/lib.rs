@@ -656,6 +656,30 @@ mod tests {
     }
 
     /// RFC 5869 Appendix A.1 (Test Case 1): the first 32 bytes of the OKM.
+    /// Regression (Gap 8): the pre-fix `hkdf_sha256_32` could return an ALL-ZERO key.
+    #[test]
+    fn regression_hkdf_never_yields_the_all_zero_key_and_node_keys_differ() {
+        let zero = [0u8; 32];
+        let long = vec![7u8; 300];
+        for (salt, ikm, info) in [
+            (&b""[..], &b""[..], &b""[..]),
+            (&b"s"[..], &b"k"[..], &b"i"[..]),
+            (&long[..], &long[..], &long[..]),
+            (&[0u8; 64][..], &[0u8; 32][..], &[0u8; 8][..]),
+        ] {
+            assert_ne!(hkdf_sha256_32(salt, ikm, info), zero);
+        }
+        let master = [9u8; 32];
+        let keys: Vec<[u8; 32]> = (0..8).map(|i| derive_node_auth_key(&master, i)).collect();
+        for (i, a) in keys.iter().enumerate() {
+            assert_ne!(*a, zero);
+            for b in &keys[i + 1..] {
+                assert_ne!(a, b, "two nodes derived the same auth key");
+            }
+        }
+        assert_eq!(derive_node_auth_key(&master, 3), keys[3], "deterministic");
+    }
+
     #[test]
     fn hkdf_sha256_matches_rfc5869_test_case_1() {
         let ikm = [0x0bu8; 22];

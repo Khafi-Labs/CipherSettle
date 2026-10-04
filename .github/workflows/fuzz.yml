@@ -1,24 +1,43 @@
-# Gap 8 / T-9: scheduled coverage-guided fuzzing (libFuzzer via cargo-fuzz).
-# Nightly toolchain on purpose (cargo-fuzz needs -Z flags); this is separate
-# from the pinned-stable CI so it can never affect the release build.
-# STATUS: written in a sandbox without nightly access -- NOT yet executed in CI.
-# The same bodies run on stable on every push via `quorum_adversarial --only W`.
+# Gap 8 / T-9: coverage-guided fuzzing (libFuzzer via cargo-fuzz), one matrix job
+# per target. Run manually with seconds=3600 to satisfy the Gap 8 criterion
+# ("at least 1 hour per target, no crash"); the weekly schedule also uses 3600.
+#
+# STATUS: statically linted (actionlint) and structurally checked
+# (ci/check_fuzz_setup.sh) in a sandbox with no nightly toolchain, so this
+# workflow has NEVER been executed. Gap 8 stays PARTIALLY CLOSED until
+# VERIFICATION_RUNBOOK.md section 3 is satisfied.
+#
+# How a failure is made impossible to miss:
+#   * `defaults.run.shell: bash` => -eo pipefail, so `cargo fuzz | tee` fails if cargo fuzz fails
+#   * a crash / timeout / OOM makes cargo-fuzz exit non-zero => the job fails
+#   * ci/assert_fuzz_ran.sh independently requires libFuzzer's final
+#     "Done N runs in S second(s)" with S >= seconds and no failure markers
+#   * `fuzz-gate` fails unless EVERY matrix job succeeded
 name: fuzz
 
 on:
   workflow_dispatch:
     inputs:
-      seconds: { description: "seconds per target", default: "600" }
+      seconds: { description: "seconds of fuzzing per target (3600 for Gap 8 closure)", default: "3600" }
   schedule:
     - cron: "17 3 * * 0"   # weekly, Sunday 03:17 UTC
 
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: never
+  FUZZ_SECONDS: ${{ github.event.inputs.seconds || '3600' }}
+
 jobs:
   fuzz:
+    name: fuzz ${{ matrix.target }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 300     # build + FUZZ_SECONDS + slack; raise if seconds > 10000
     strategy:
       fail-fast: false
       matrix:
@@ -32,14 +51,61 @@ jobs:
           - audit_log_json
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - run: rustup toolchain install nightly --profile minimal && rustup default nightly
-      - run: cargo install cargo-fuzz --locked
+      - name: Validate the requested duration
+        run: |
+          [[ "$FUZZ_SECONDS" =~ ^[0-9]+$ ]] && [ "$FUZZ_SECONDS" -ge 60 ] \
+            || { echo "FUZZ_SECONDS must be an integer >= 60, got '$FUZZ_SECONDS'"; exit 1; }
+          echo "fuzzing ${{ matrix.target }} for $FUZZ_SECONDS seconds"
+      - name: Install nightly (explicit; the repo pin is stable)
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly --version
+          rustc +nightly --version
+      - name: Install cargo-fuzz (pinned)
+        run: cargo +nightly install cargo-fuzz --locked --version 0.13.2
+      - name: Restore corpus grown by previous runs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Require the committed seed + regression corpus to be present
+        run: |
+          d="fuzz/corpus/${{ matrix.target }}"
+          echo "seed files:       $(find "$d" -type f -name 'seed-*' | wc -l)"
+          echo "regression files: $(find "$d" -type f -name 'regress-*' | wc -l)"
+          test "$(find "$d" -type f -name 'seed-*' | wc -l)" -ge 1
+          test "$(find "$d" -type f -name 'regress-*' | wc -l)" -ge 1
       - name: Fuzz ${{ matrix.target }}
         working-directory: fuzz
-        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=${{ github.event.inputs.seconds || '600' }} -rss_limit_mb=2048
-      - name: Keep crash artifacts
+        run: |
+          cargo +nightly fuzz run "${{ matrix.target }}" -- \
+            -max_total_time="$FUZZ_SECONDS" -timeout=30 -rss_limit_mb=2048 \
+            -max_len=65536 -print_final_stats=1 2>&1 | tee "../fuzz-${{ matrix.target }}.log"
+      - name: Require a clean run of the requested length
+        run: bash ci/assert_fuzz_ran.sh "fuzz-${{ matrix.target }}.log" "$FUZZ_SECONDS"
+      - name: Keep the log (always)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-log-${{ matrix.target }}
+          path: fuzz-${{ matrix.target }}.log
+          if-no-files-found: warn
+      - name: Keep crash / timeout / oom artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fuzz-crash-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: warn
+
+  fuzz-gate:
+    name: all 7 targets clean
+    needs: fuzz
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail unless every target job succeeded
+        run: |
+          echo "fuzz matrix result: ${{ needs.fuzz.result }}"
+          [ "${{ needs.fuzz.result }}" = "success" ]

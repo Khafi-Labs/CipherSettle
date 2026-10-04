@@ -15,6 +15,12 @@ on:
 permissions:
   contents: read
 
+# `shell: bash` makes every `run:` use `bash -eo pipefail`, so a failing command
+# on the left of `| tee` fails the step (the unspecified default has no pipefail).
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -35,6 +41,8 @@ jobs:
           rustup toolchain install "$v" --profile minimal --component clippy --component rustfmt
           rustup default "$v"
           rustc --version
+      - name: Active compiler must equal the pin (a different rustc proves nothing)
+        run: bash ci/assert_toolchain_pinned.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
@@ -45,6 +53,14 @@ jobs:
       - run: bash ci/check_pin_policy.sh
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --locked --all-targets -- -D warnings
+      - name: Fuzz setup is internally consistent (targets, bodies, matrix, corpus)
+        run: bash ci/check_fuzz_setup.sh
+      - name: The fuzz-run gate rejects short runs, crashes and timeouts (synthetic logs)
+        run: bash ci/check_fuzz_assert.sh
+      - name: libFuzzer crate type-checks on the pinned toolchain (it is NOT run here)
+        run: |
+          v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          cargo +"$v" check --locked --manifest-path fuzz/Cargo.toml --bins
 
   test:
     name: build + test with Postgres (DB required)
@@ -68,6 +84,8 @@ jobs:
           v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
           rustup toolchain install "$v" --profile minimal
           rustup default "$v"
+      - name: Active compiler must equal the pin (a different rustc proves nothing)
+        run: bash ci/assert_toolchain_pinned.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
@@ -75,9 +93,13 @@ jobs:
             ~/.cargo/git
             target
           key: test-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+      - name: DB-required mode must be on (a skipped DB test must be a failure)
+        run: test "$CIPHERSETTLE_TEST_DB_REQUIRED" = "1"
       - name: Create test databases
         run: bash ci/setup_test_db.sh
       - run: cargo build --workspace --locked --all-targets
+      # Includes the unit regressions and the committed fuzz-corpus replay
+      # (quorum_adversarial corpus_tests); NOT coverage-guided fuzzing.
       - run: cargo test --workspace --locked
       # Belt and braces: independent of the env var above, prove the DB tests
       # genuinely ran (a skip is reported by cargo as a pass).
@@ -103,6 +125,8 @@ jobs:
           v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
           rustup toolchain install "$v" --profile minimal
           rustup default "$v"
+      - name: Active compiler must equal the pin (a different rustc proves nothing)
+        run: bash ci/assert_toolchain_pinned.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
@@ -119,6 +143,7 @@ jobs:
       - name: Require the full expected check count
         run: |
           grep -q '^71/71 checks passed as expected\.' adversarial.log
+          ! grep -q '^\[FAIL\]' adversarial.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -135,6 +160,8 @@ jobs:
           v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
           rustup toolchain install "$v" --profile minimal
           rustup default "$v"
+      - name: Active compiler must equal the pin (a different rustc proves nothing)
+        run: bash ci/assert_toolchain_pinned.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |

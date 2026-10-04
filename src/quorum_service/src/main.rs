@@ -1289,3 +1289,29 @@ async fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod f21_regression_tests {
+    use super::*;
+
+    /// Regression (F-21): request-body base64 must be an `Err` (-> HTTP 400), never
+    /// a panic. Pins the helper; handler-level behaviour is pinned by adversarial Z4/Z5.
+    #[test]
+    fn regression_malformed_request_base64_is_an_error_not_a_panic() {
+        let long = "A".repeat((1 << 20) + 1);
+        for bad in [
+            "!!! not base64 !!!",
+            "=",
+            "A",
+            "AAAAA",
+            "\u{0}",
+            "\u{feff}AAAA",
+            long.as_str(),
+        ] {
+            let _ = b64_decode_request_field(bad);
+        }
+        assert!(b64_decode_request_field("!!! not base64 !!!").is_err());
+        assert!(b64_decode_request_field("A").is_err());
+        assert_eq!(b64_decode_request_field("eA==").unwrap(), b"x");
+    }
+}

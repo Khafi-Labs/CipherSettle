@@ -1,0 +1,4 @@
+# cargo-fuzz needs nightly. This file shadows the repo-root pin for anything run inside fuzz/.
+[toolchain]
+channel = "nightly"
+profile = "minimal"

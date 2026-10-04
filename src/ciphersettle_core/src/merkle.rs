@@ -341,6 +341,29 @@ mod tests {
         assert!(!proof.verify(&data[0], &root));
     }
 
+    /// Regression (Gap 8): an out-of-range `peak_index` once panicked in `verify`
+    /// (found by the JSON-structure fuzz mutator). Every such value must be
+    /// rejected. The JSON form is pinned by the committed corpus file
+    /// fuzz/corpus/merkle_proof_json/regress-peak-index-out-of-range.json.
+    #[test]
+    fn regression_out_of_range_peak_index_is_rejected_not_panicked() {
+        let (log, data) = build_log(6);
+        let root = log.root().unwrap();
+        let good = log.prove(5).unwrap();
+        assert!(
+            good.verify(&data[5], &root),
+            "control: untouched proof verifies"
+        );
+        for bad_index in [good.peaks.len(), good.peaks.len() + 1, 25, usize::MAX] {
+            let mut p = good.clone();
+            p.peak_index = bad_index;
+            assert!(
+                !p.verify(&data[5], &root),
+                "peak_index {bad_index} must be rejected"
+            );
+        }
+    }
+
     fn build_log(n: usize) -> (MerkleLog, Vec<Vec<u8>>) {
         let mut log = MerkleLog::new();
         let mut data = Vec::new();
