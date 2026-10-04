@@ -185,3 +185,10 @@ Failing first: `--only R` on the previous build: 0 durable holders per acknowled
 - Evidence: `evidence/gap8_regression_summary_session14*.txt`, `gap8_adversarial_*`, `gap8_w_100k_session14.log`.
 - Toolchain caveat: rustc 1.91.1 (distro), not the pinned 1.97; rerun CI on the pin.
 - NOT closed: coverage-guided fuzz hours (needs nightly), node state-machine fuzzing, indexing/arithmetic panic lints. Next: run `fuzz.yml` in CI; then Gap 2 (needs human cryptographer), Gap 4/5 (infrastructure), per work order.
+
+# Session 15: verification preparation for Gaps 6, 8, 13 (no gap closed)
+- The sandbox was reset again; the previous session's uncommitted prep work was lost. Rebuilt from the last bundle (ed54d0c) and the surviving VERIFICATION_RUNBOOK.md/corpus_tests.rs, committed immediately.
+- Added: `ci/assert_toolchain_pinned.sh` (wired into every pinned CI install), `ci/assert_fuzz_ran.sh` + `check_fuzz_assert.sh` (gate self-tested on synthetic logs), `ci/check_fuzz_setup.sh`, `ci/run_local_regression.sh`; hardened `fuzz.yml` (pipefail, 3600 s default, gate job, crash artifacts, corpus cache); `ci.yml` pipefail, DB-required check, no-[FAIL] check; 60-file committed fuzz corpus + replay tests; 3 unit regressions; `quorum_node audit-powerloss-{workload,verify}` for the Gap 13 power-loss rehearsal.
+- EXECUTED on rustc 1.91.1 (NOT the pin 1.97): fmt, clippy -D warnings, build, 168 unit tests (DB markers ran), adversarial 71/71, broken-DB negative test, fuzz setup/gate checks. The ONLY failing step is `toolchain_pinned`, which fails by design on 1.91.
+- NOT EXECUTED: anything on GitHub, rustc 1.97, nightly/libFuzzer, real power-cut rehearsal, cargo audit/deny this session. Mutation checks and the orchestrator e2e from the lost session were not repeated.
+- Gap statuses unchanged: 8 partial, 6 partial, 13 SIGKILL-only.
