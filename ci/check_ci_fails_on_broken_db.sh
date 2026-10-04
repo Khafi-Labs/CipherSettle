@@ -10,7 +10,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export CIPHERSETTLE_TEST_DB_URL="postgres://postgres:unused@127.0.0.1:1/nonexistent"
-T=(cargo test -q --locked -p quorum_service --test db_pool_concurrency)
+T=(cargo test -q --locked -p quorum_service --test db_pool_concurrency --test migrations)
 fail=0
 expect() { if [ "$2" = "yes" ]; then echo "  ok:   $1"; else echo "  FAIL: $1"; fail=1; fi; }
 

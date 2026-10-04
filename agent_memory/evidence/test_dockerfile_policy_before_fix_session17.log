@@ -1,0 +1,9 @@
+bad-fixture rc=1 (must be non-zero)
+FAIL: D1 untagged/latest base: rust:latest
+FAIL: D2 final stage USER is 'unset' (must be non-root)
+FAIL: D3 final stage lacks exec-form ENTRYPOINT
+FAIL: D3 shell-form CMD/ENTRYPOINT
+FAIL: D4 ADD of a remote URL
+FAIL: D4 COPY of config/key material into the image
+FAIL: D6 final stage is a toolchain image: rust:latest
+FAIL: D5 /nonexistent missing

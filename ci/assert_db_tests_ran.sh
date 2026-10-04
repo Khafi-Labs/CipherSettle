@@ -12,7 +12,7 @@
 set -uo pipefail
 dir="${1:-target/tmp}"
 shopt -s nullglob
-markers=("$dir"/db_pool_concurrency.*.outcome)
+markers=("$dir"/*.outcome)
 
 if [ "${#markers[@]}" -eq 0 ]; then
   echo "FAIL: no DB test outcome markers in $dir (the DB tests did not run at all)" >&2

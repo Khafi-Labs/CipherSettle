@@ -51,6 +51,10 @@ jobs:
             target
           key: lint-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
       - run: bash ci/check_pin_policy.sh
+      - name: Dockerfile policy (non-root, tagged bases, exec entrypoint, no baked-in secrets)
+        run: bash ci/check_dockerfile.sh
+      - name: The Dockerfile policy rejects a deliberately bad Dockerfile
+        run: "! bash ci/check_dockerfile.sh ci/fixtures/Dockerfile.bad /nonexistent"
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --locked --all-targets -- -D warnings
       - name: Fuzz setup is internally consistent (targets, bodies, matrix, corpus)
@@ -105,6 +109,8 @@ jobs:
       # genuinely ran (a skip is reported by cargo as a pass).
       - name: Assert DB tests ran, not skipped
         run: bash ci/assert_db_tests_ran.sh
+      - name: Backup -> restore rehearsal (Postgres tier) with digest comparison
+        run: bash ci/backup_restore_rehearsal.sh rehearsal_out
 
   adversarial:
     name: adversarial suite (groups A-G, I-N, P, Q, R, S, Z; H needs iptables, see notes)
@@ -185,3 +191,26 @@ jobs:
       # Accepted advisories come from deny.toml only; see ci/audit_ignores.sh.
       - run: cargo audit $(bash ci/audit_ignores.sh)
       - run: cargo deny check
+
+  container-image:
+    name: container image (${{ matrix.bin }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        bin: [quorum_node, quorum_service, quorum_notary]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Build the image
+        run: docker build --build-arg BIN=${{ matrix.bin }} -t ciphersettle/${{ matrix.bin }}:ci .
+      - name: Runs as a non-root user and contains no shell
+        run: |
+          u=$(docker inspect --format '{{.Config.User}}' ciphersettle/${{ matrix.bin }}:ci)
+          echo "image user: $u"; case "$u" in ""|0|root|0:*|root:*) echo "FAIL: root image"; exit 1;; esac
+          ! docker run --rm --entrypoint /bin/sh ciphersettle/${{ matrix.bin }}:ci -c true 2>/dev/null
+      - name: No config, key or share material is baked into the image filesystem
+        run: |
+          id=$(docker create ciphersettle/${{ matrix.bin }}:ci)
+          docker export "$id" | tar -t > /tmp/fs.txt; docker rm "$id" >/dev/null
+          wc -l /tmp/fs.txt
+          ! grep -E '\.(pem|key|der|json)$' /tmp/fs.txt

@@ -1,0 +1,16 @@
+R1 ok: source schema built by the real migrator, schema version 1
+R2 ok: loaded rows (2000 invoices/nullifiers/outbox + small tables)
+R3 ok: pg_dump -Fc 145849 bytes in 0.14 s
+R4 ok: pg_restore into an empty database in 0.13 s (sample RTO for this data size, same host)
+  ok:   audit_failures (1 49ff840b8d76906ccf1a3510922e6209)
+  ok:   audit_outbox (2000 5f575358e8a0a73d3be04c8f317d3d4b)
+  ok:   crypto_meta (1 93d36ee95e600b9e396e61f7cfa03d36)
+  ok:   derive_call_times (500 0638e1424bbe75165a2bae729d17ab5b)
+  ok:   invoices (2000 98be9fcd6b72d7204ffc289d2aacdc77)
+  ok:   nullifiers (2000 704af20d0939500b50ed14c8e972f40f)
+  ok:   regulators (2 45dc92cf5754c7ddbdbd86f2ca0f4435)
+  ok:   schema_migrations (1 bafa8c55213c8b198e01159935c9657f)
+R5 ok: every table matches (row count + content digest): audit_failures audit_outbox crypto_meta derive_call_times invoices nullifiers regulators schema_migrations
+R6 ok: migrator treats the restored DB as current (migrations applied by this run: [])
+R7 ok: negative check, a single deleted row IS detected by the comparison
+RESULT: backup/restore rehearsal passed (Postgres tier only)

@@ -1,0 +1,8 @@
+   Compiling quorum_service v0.1.0 (/home/claude/repo/src/quorum_service)
+error: couldn't read `src/quorum_service/tests/../src/migrations.rs`: No such file or directory (os error 2)
+  --> src/quorum_service/tests/migrations.rs:15:1
+   |
+15 | mod migrations;
+   | ^^^^^^^^^^^^^^^
+
+error: could not compile `quorum_service` (test "migrations") due to 1 previous error

@@ -7,92 +7,6 @@
 
 use tokio_postgres::Client;
 
-pub const SCHEMA_SQL: &str = r#"
-CREATE TABLE IF NOT EXISTS nullifiers (
-    nullifier_hash TEXT PRIMARY KEY
-);
-
-CREATE TABLE IF NOT EXISTS invoices (
-    invoice_id TEXT PRIMARY KEY,
-    issuer TEXT NOT NULL,
-    bank TEXT,
-    ciphertext BYTEA,
-    status TEXT NOT NULL,
-    created_at_ms BIGINT NOT NULL,
-    settled_at_ms BIGINT,
-    ciphertext_pruned BOOLEAN NOT NULL DEFAULT FALSE,
-    -- `ciphersettle_core::InvoiceCommitment::to_bytes()` -- an opaque,
-    -- salted commitment blob the caller computed client-side over the
-    -- invoice's plaintext fields. This service never sees, and has no
-    -- way to see, those fields themselves (see `commitment.rs`'s module
-    -- doc comment); it only stores and logs the already-opaque blob,
-    -- the same trust boundary it already keeps for `ciphertext`.
-    commitment_bytes BYTEA,
-    -- Assigned once this row's commitment is appended to the in-process
-    -- `MerkleLog` (see `main.rs`'s `AppState::merkle_log`). NULL until
-    -- that append happens; see `register_invoice`'s handler for why
-    -- those are two separate steps rather than one.
-    merkle_leaf_index BIGINT,
-    -- Insertion-order tiebreaker used only to rebuild the in-memory
-    -- Merkle log in the same order at startup (`created_at_ms` alone
-    -- isn't guaranteed unique). Not meaningful on its own.
-    merkle_seq BIGSERIAL
-);
-
-CREATE TABLE IF NOT EXISTS regulators (
-    caller_id TEXT PRIMARY KEY
-);
-
-CREATE TABLE IF NOT EXISTS derive_call_times (
-    caller_id TEXT NOT NULL,
-    called_at_ms BIGINT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_derive_call_times_caller ON derive_call_times (caller_id);
-
--- Cutover guard (see `enforce_crypto_epoch`): durable key/value markers
--- recording which cryptographic scheme this database's contents belong to.
-CREATE TABLE IF NOT EXISTS crypto_meta (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-
--- F-14: transactional outbox for audit events. Every state-changing handler
--- inserts its audit event HERE in the SAME statement/transaction as the state
--- change, so a committed change always has a durable record of the audit
--- obligation. status: pending -> inflight -> done (or back to pending with
--- last_error and a backoff on failure). Delivery to the audit quorum is
--- at-least-once: a crash between the audit append and the `done` update can
--- cause one duplicate audit entry after the stale-claim timeout.
-CREATE TABLE IF NOT EXISTS audit_outbox (
-    id BIGSERIAL PRIMARY KEY,
-    invoice_id TEXT NOT NULL,
-    actor TEXT NOT NULL,
-    action TEXT NOT NULL,
-    timestamp_unix_ms BIGINT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    attempts INT NOT NULL DEFAULT 0,
-    last_error TEXT,
-    created_at_ms BIGINT NOT NULL,
-    claimed_at_ms BIGINT,
-    next_attempt_at_ms BIGINT NOT NULL DEFAULT 0,
-    done_at_ms BIGINT
-);
-CREATE INDEX IF NOT EXISTS idx_audit_outbox_status ON audit_outbox (status, id);
-
--- F-13: failed audit appends for operations that have NO state change to hold
--- an outbox row (derive-key is fail-closed: the key is denied). Diagnosable
--- record of every such denial.
-CREATE TABLE IF NOT EXISTS audit_failures (
-    id BIGSERIAL PRIMARY KEY,
-    at_ms BIGINT NOT NULL,
-    invoice_id TEXT NOT NULL,
-    actor TEXT NOT NULL,
-    action TEXT NOT NULL,
-    error TEXT NOT NULL
-);
-"#;
-
 /// Identifies the cryptographic scheme the stored invoice ciphertexts were
 /// sealed under: blstrs-only BLS12-381, RFC 9380 hash-to-G2 with the
 /// `quorum_core::bls::SIG_DST` tag. Keys derived under the earlier
@@ -233,8 +147,8 @@ pub struct InvoiceRow {
     pub ciphertext_pruned: bool,
 }
 
-pub async fn init_schema(client: &Client) -> Result<(), tokio_postgres::Error> {
-    client.batch_execute(SCHEMA_SQL).await
+pub async fn init_schema(client: &mut Client) -> Result<Vec<i32>, crate::migrations::MigrateError> {
+    crate::migrations::migrate(client).await
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

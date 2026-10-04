@@ -51,6 +51,7 @@
 mod config;
 mod db;
 mod error;
+mod migrations;
 mod tls_serve;
 
 use axum::extract::{Path, Query, State};
@@ -1074,6 +1075,29 @@ fn b64_decode_request_field(s: &str) -> Result<Vec<u8>, String> {
 
 #[tokio::main]
 async fn main() {
+    // Deploy-time subcommand (Gap 10): apply pending schema migrations and
+    // exit, without a quorum, config file or listener:
+    //   quorum_service migrate <db_url>
+    if std::env::args().nth(1).as_deref() == Some("migrate") {
+        let Some(db_url) = std::env::args().nth(2) else {
+            quorum_core::config::fatal("service", "usage: quorum_service migrate <db_url>");
+        };
+        let (mut client, conn) = or_fatal(
+            "service",
+            "cannot connect to the database",
+            tokio_postgres::connect(&db_url, tokio_postgres::NoTls).await,
+        );
+        tokio::spawn(async move {
+            let _ = conn.await;
+        });
+        let applied = or_fatal(
+            "service",
+            "schema migration",
+            migrations::migrate(&mut client).await,
+        );
+        println!("migrations applied by this run: {applied:?}");
+        return;
+    }
     let Some(config_path) = std::env::args().nth(1) else {
         fatal("service", "usage: quorum_service <config.json>");
     };
@@ -1128,16 +1152,19 @@ async fn main() {
     );
 
     {
-        let init_client = or_fatal(
+        let mut init_client = or_fatal(
             "service",
             "failed to get initial db connection",
             db_pool.get().await,
         );
-        or_fatal(
+        let applied = or_fatal(
             "service",
-            "failed to initialize schema",
-            db::init_schema(&init_client).await,
+            "schema migration",
+            db::init_schema(&mut init_client).await,
         );
+        if !applied.is_empty() {
+            eprintln!("[service] applied schema migration(s): {applied:?}");
+        }
         // Cutover guard: refuse to serve a database written under a
         // different cryptographic scheme (see `db::CRYPTO_EPOCH`).
         if let Err(why) =

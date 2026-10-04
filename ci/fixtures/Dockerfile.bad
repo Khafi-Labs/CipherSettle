@@ -1,0 +1,6 @@
+FROM rust:latest
+ADD https://example.com/install.sh /install.sh
+COPY . .
+COPY node-0.json /etc/node.json
+RUN cargo build --release
+CMD cargo run

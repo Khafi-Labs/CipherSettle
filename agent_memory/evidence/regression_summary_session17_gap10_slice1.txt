@@ -1,0 +1,22 @@
+date:    2026-10-04T17:03:41Z
+git:     7404e5efa3fab767da9ffc41f98ab8ecfdcbe375 (+uncommitted changes)
+rustc:   rustc 1.97.0 (2d8144b78 2026-07-07)
+pinned:  1.97
+
+EXECUTED + PASSED   toolchain_pinned
+EXECUTED + PASSED   dep_pin_policy
+EXECUTED + PASSED   fuzz_setup_consistency
+EXECUTED + PASSED   fuzz_gate_selftest
+EXECUTED + PASSED   fmt
+EXECUTED + PASSED   clippy
+EXECUTED + PASSED   fuzz_crate_typecheck
+EXECUTED + PASSED   build
+EXECUTED + PASSED   unit_tests
+EXECUTED + PASSED   db_tests_really_ran
+EXECUTED + PASSED   broken_db_must_fail_ci
+EXECUTED + PASSED   adversarial_run
+EXECUTED + PASSED   adversarial_72_of_72
+unit tests: passed 176 failed 0
+72/72 checks passed as expected.
+OVERALL: ALL STEPS PASSED
+NOT covered: GitHub Actions, cargo audit/deny, fuzzing, orchestrator e2e, power-loss rehearsal, Test E flake campaign.
