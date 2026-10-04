@@ -417,6 +417,7 @@ dependencies = [
  "quorum_vetseal",
  "rand",
  "serde",
+ "serde_json",
  "sha2",
 ]
 

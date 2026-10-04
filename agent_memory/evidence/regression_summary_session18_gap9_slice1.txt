@@ -1,0 +1,24 @@
+date:    2026-10-04T17:32:12Z
+git:     1fe89cd15a7ac9f572202b1b1ad77885a60a6b57 (+uncommitted changes)
+rustc:   rustc 1.97.0 (2d8144b78 2026-07-07)
+pinned:  1.97
+
+EXECUTED + PASSED   toolchain_pinned
+EXECUTED + PASSED   dep_pin_policy
+EXECUTED + PASSED   fuzz_setup_consistency
+EXECUTED + PASSED   fuzz_gate_selftest
+EXECUTED + PASSED   fmt
+EXECUTED + PASSED   clippy
+EXECUTED + FAILED   fuzz_crate_typecheck (rc=101, see /tmp/vout18/fuzz_crate_typecheck.log)
+EXECUTED + PASSED   build
+EXECUTED + PASSED   unit_tests
+EXECUTED + PASSED   db_tests_really_ran
+EXECUTED + PASSED   broken_db_must_fail_ci
+EXECUTED + PASSED   adversarial_run
+EXECUTED + PASSED   adversarial_75_of_75
+unit tests: passed 183 failed 0
+75/75 checks passed as expected.
+OVERALL: AT LEAST ONE STEP FAILED
+NOT covered: GitHub Actions, cargo audit/deny, fuzzing, orchestrator e2e, power-loss rehearsal, Test E flake campaign.
+Addendum: fuzz_crate_typecheck FAILED in this run only because fuzz/Cargo.lock lacked the new serde_json edge of quorum_core;
+lock regenerated (1-line diff) and `cargo check --locked --manifest-path fuzz/Cargo.toml --bins` then PASSED. All other steps passed in the run above.

@@ -113,7 +113,7 @@ jobs:
         run: bash ci/backup_restore_rehearsal.sh rehearsal_out
 
   adversarial:
-    name: adversarial suite (groups A-G, I-N, P, Q, R, S, Z; H needs iptables, see notes)
+    name: adversarial suite (groups A-G, I-N, P, Q, R, S, T, Z; H needs iptables, see notes)
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -145,10 +145,10 @@ jobs:
       # The runner exits 1 if ANY check fails, and records a skipped group
       # (e.g. no Postgres) as a failure, so a skip cannot pass here.
       - name: Run adversarial suite
-        run: cargo run --locked -p quorum_adversarial -- --only A,B,C,D,M,L,E,I,F,G,J,K,N,Z,P,Q,R,S,W | tee adversarial.log
+        run: cargo run --locked -p quorum_adversarial -- --only A,B,C,D,M,L,E,I,F,G,J,K,N,Z,P,Q,R,S,T,W | tee adversarial.log
       - name: Require the full expected check count
         run: |
-          grep -q '^72/72 checks passed as expected\.' adversarial.log
+          grep -q '^75/75 checks passed as expected\.' adversarial.log
           ! grep -q '^\[FAIL\]' adversarial.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()

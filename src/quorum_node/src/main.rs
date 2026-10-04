@@ -324,7 +324,11 @@ async fn main() {
             &format!("failed to read config {config_path}"),
             std::fs::read_to_string(&config_path),
         );
-        or_fatal("node", "invalid config JSON", serde_json::from_str(&raw))
+        or_fatal(
+            "node",
+            "invalid config",
+            quorum_core::secret_files::load_config::<NodeConfig>(&raw),
+        )
     };
 
     eprintln!(

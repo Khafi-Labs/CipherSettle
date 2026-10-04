@@ -8,6 +8,7 @@ description = "Standalone external notarization service for Phase 2 of the thres
 
 [dependencies]
 quorum_audit = { path = "../quorum_audit" }
+quorum_core = { path = "../quorum_core" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 tokio-rustls = "0.24"

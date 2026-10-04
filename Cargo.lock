@@ -1011,6 +1011,7 @@ dependencies = [
  "base64",
  "ed25519-dalek",
  "quorum_audit",
+ "quorum_core",
  "rand 0.8.8",
  "rustls",
  "serde",

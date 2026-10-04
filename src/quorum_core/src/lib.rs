@@ -37,6 +37,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod bls;
 pub mod config;
+pub mod secret_files;
 
 // The DKG and threshold-BLS primitives live in `bls` (blstrs only).
 pub use bls::{

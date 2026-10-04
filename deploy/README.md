@@ -33,3 +33,14 @@ lock, refuse newer-than-binary and edited-after-applied. Apply as a deploy step 
   by an operator on a second host.
 * Not covered: point-in-time recovery (WAL archiving), cross-version restore, off-site/encrypted backup
   storage, backup retention, a restore done by someone other than the author.
+
+## Secrets from files (Gap 9 slice; EXECUTED tests, no secret-manager integration)
+Any of these config fields may be supplied as `<name>_file` (a path) instead of inline: `service_auth_key_file`,
+`audit_keypair_file`, `key_der_file`, `client_key_der_file`, `tls_key_der_file`, and `api_keys[].key_file`. The file holds
+exactly what the inline `_b64` value would (base64 text; surrounding whitespace is trimmed). Rules, enforced at start:
+exactly one source per secret; the file must not be accessible by group/other (chmod 600/400); non-empty; errors name the
+field and path but never the value. Mount secrets from your secret manager (Kubernetes secret volume, Vault agent, Docker
+secret) at those paths. LIMITS: read once at process start (a rotated secret needs a restart; there is no online rotation);
+the value lives in process memory; Kubernetes secret mounts default to mode 0644 so set `defaultMode: 0400`; relative
+paths resolve against the process working directory (use absolute paths); `cert_der_b64` fields are public and stay inline.
+The KEK file for share encryption (`share_store`) is already a separate 0600 file and is unchanged.

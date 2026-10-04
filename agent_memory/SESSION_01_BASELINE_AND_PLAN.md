@@ -210,3 +210,10 @@ Failing first: `--only R` on the previous build: 0 durable holders per acknowled
 - Two things my own change tripped, fixed WITHOUT weakening the gates: the repo's "no `|| true`" CI-script gate (cleanup now warns instead of swallowing), and a clippy `needless_borrows` in the new test.
 - EXECUTED on rustc 1.97.0: ALL regression steps pass (176 unit tests, adversarial 72/72): `evidence/regression_summary_session17_gap10_slice1.txt`.
 - NOT verified: Docker images were never built or scanned (no daemon/registry reachable); CI `container-image` job never run; no 5-node deployment manifest; node-tier backup/restore never rehearsed on a second host; no PITR. Gap 10 stays OPEN.
+
+# Session 18: Gap 9 slice 1 — secrets from files
+- Tests first: 7 unit tests in `quorum_core/src/secret_files.rs` written before the function existed (`evidence/test_secret_files_before_fix_session18.log`: compile failure), then implemented. Mutation-checked: permission check off -> 2 fail; one-source rule off -> 1 fails.
+- Wired into node, service and notary (`quorum_core::secret_files::load_config`; notary gained a `quorum_core` dependency, Cargo.lock +1 edge; `fuzz/Cargo.lock` +1 edge). New adversarial group T (3 checks) and group Z now boots the real service with master + API key from 0600 files. Suite count is now 75/75 (ci.yml, run_local_regression.sh, runbook updated).
+- EXECUTED on rustc 1.97.0: unit tests 183 pass / 0 fail, adversarial 75/75, all other regression steps pass (`evidence/regression_summary_session18_gap9_slice1.txt`).
+- NOT done (Gap 9 stays OPEN): certificate rotation, online secret rotation, secret-manager client, orchestrator still writes inline-secret configs, secrets remain in process memory.
+- Operator docs: `deploy/README.md` "Secrets from files". Note for operators: Kubernetes secret mounts default to 0644 and will be REFUSED until `defaultMode: 0400`.

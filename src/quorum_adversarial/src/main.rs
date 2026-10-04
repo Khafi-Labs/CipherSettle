@@ -1086,12 +1086,25 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
     let service_binary = locate_sibling_binary("quorum_service");
     let service_addr = "127.0.0.1:9809".to_string();
     let key = "z-issuer-key";
+    // Gap 9: the service gets its derive-auth master and API key from 0600
+    // FILES (not inline config), through the real binary.
+    let (master_file, apikey_file) = {
+        use std::os::unix::fs::PermissionsExt;
+        let m = q.work_dir.join("z_master.secret");
+        let a = q.work_dir.join("z_apikey.secret");
+        std::fs::write(&m, format!("{}\n", b64(&q.service_auth_key))).unwrap();
+        std::fs::write(&a, format!("{key}\n")).unwrap();
+        for f in [&m, &a] {
+            std::fs::set_permissions(f, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        (m, a)
+    };
     let config = serde_json::json!({
         "listen_addr": service_addr, "db_url": Z_DB, "admin_caller_id": "z-admin",
-        "api_keys": [{"key": key, "caller_id": "z-issuer"}],
+        "api_keys": [{"key_file": apikey_file.to_string_lossy(), "caller_id": "z-issuer"}],
         "client_cert_der_b64": b64(&q.client_identity.cert_der),
         "client_key_der_b64": b64(&q.client_identity.key_der),
-        "service_auth_key_b64": b64(&q.service_auth_key),
+        "service_auth_key_file": master_file.to_string_lossy(),
         "quorum_nodes": (0..N).map(|i| serde_json::json!({
             "id": i, "addr": q.addrs[i], "cert_der_b64": b64(&q.node_identities[i].cert_der),
         })).collect::<Vec<_>>(),
@@ -1373,6 +1386,79 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
     let _ = service_child.kill();
     let _ = service_child.wait();
     kill_all(&mut q.children);
+}
+
+// =========================================================================
+// TEST T (Gap 9 slice): secrets loaded from files; unsafe sources refused.
+// =========================================================================
+//  T1  service: a secret file readable by group/other => refuses to start
+//  T2  node: the same secret given inline AND by file => refuses to start
+//  T3  neither refusal prints the secret value
+// (The happy path is exercised by group Z, whose service gets its derive-auth
+// master and API key from 0600 files.)
+fn t_run_refusal(
+    binary: &str,
+    config: &serde_json::Value,
+    dir: &std::path::Path,
+    name: &str,
+) -> (Option<i32>, String) {
+    let path = dir.join(format!("{name}.json"));
+    std::fs::write(&path, serde_json::to_vec(config).unwrap_or_default()).unwrap();
+    match Command::new(locate_sibling_binary(binary))
+        .arg(&path)
+        .output()
+    {
+        Ok(o) => (
+            o.status.code(),
+            String::from_utf8_lossy(&o.stderr).into_owned(),
+        ),
+        Err(e) => (None, format!("spawn failed: {e}")),
+    }
+}
+
+async fn test_t_secret_files(report: &mut Report) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("adversarial_t_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let secret = "T-SECRET-VALUE-0123456789";
+    let loose = dir.join("loose.secret");
+    std::fs::write(&loose, secret).unwrap();
+    std::fs::set_permissions(&loose, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let tight = dir.join("tight.secret");
+    std::fs::write(&tight, secret).unwrap();
+    std::fs::set_permissions(&tight, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+    let (code1, err1) = t_run_refusal(
+        "quorum_service",
+        &serde_json::json!({"service_auth_key_file": loose.to_string_lossy()}),
+        &dir,
+        "svc_loose",
+    );
+    report.record(
+        "T1: service refuses a group/other-readable secret file (exit 1, says why)",
+        code1 == Some(1) && err1.contains("permissions"),
+        format!("exit={code1:?} stderr={err1:?}"),
+    );
+    let (code2, err2) = t_run_refusal(
+        "quorum_node",
+        &serde_json::json!({
+            "service_auth_key_b64": "aW5saW5l",
+            "service_auth_key_file": tight.to_string_lossy()
+        }),
+        &dir,
+        "node_both",
+    );
+    report.record(
+        "T2: node refuses a secret given both inline and by file (exit 1, says why)",
+        code2 == Some(1) && err2.contains("both"),
+        format!("exit={code2:?} stderr={err2:?}"),
+    );
+    report.record(
+        "T3: refusals never print the secret value",
+        !err1.contains(secret) && !err2.contains(secret),
+        "stderr of T1/T2 checked for the secret string".to_string(),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // =========================================================================
@@ -3706,6 +3792,10 @@ async fn main() {
     if want('S') {
         println!("\n--- Test S: leaked single-node auth key (Gap 3 step 1) ---");
         test_s_leaked_node_key_is_contained(&mut report).await;
+    }
+    if want('T') {
+        println!("\n--- Test T: secrets from files (Gap 9) ---");
+        test_t_secret_files(&mut report).await;
     }
     if want('W') {
         println!("\n--- Test W: parser fuzz smoke (Gap 8 / T-9) ---");

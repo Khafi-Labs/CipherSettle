@@ -1107,7 +1107,11 @@ async fn main() {
             "failed to read config",
             std::fs::read_to_string(&config_path),
         );
-        or_fatal("service", "invalid config JSON", serde_json::from_str(&raw))
+        or_fatal(
+            "service",
+            "invalid config",
+            quorum_core::secret_files::load_config::<ServiceConfig>(&raw),
+        )
     };
 
     // Audit finding A5: checked immediately after config parsing, before
