@@ -192,3 +192,8 @@ Failing first: `--only R` on the previous build: 0 durable holders per acknowled
 - EXECUTED on rustc 1.91.1 (NOT the pin 1.97): fmt, clippy -D warnings, build, 168 unit tests (DB markers ran), adversarial 71/71, broken-DB negative test, fuzz setup/gate checks. The ONLY failing step is `toolchain_pinned`, which fails by design on 1.91.
 - NOT EXECUTED: anything on GitHub, rustc 1.97, nightly/libFuzzer, real power-cut rehearsal, cargo audit/deny this session. Mutation checks and the orchestrator e2e from the lost session were not repeated.
 - Gap statuses unchanged: 8 partial, 6 partial, 13 SIGKILL-only.
+
+# Session 16: Gap 11 first slice (health endpoints). No gap closed.
+- Z6 written first and FAILED (404) with the routes removed, then PASSED (`evidence/test_z6_*_session16.log`). Expected adversarial count is now 72/72 (ci.yml, run_local_regression.sh, runbook updated).
+- Gap 11 remains OPEN: no tracing, metrics, alerts, runbooks or drill. `/readyz` does not check node quorum liveness; the 503 path is untested.
+- Gaps still needing people/infrastructure: 2, 3 step 2, 4/5 (crypto review), 9, 10, 12, 15, 16. Gap 17 not reconciled (grep found no obvious stale 'not integrated' wording; needs a manual read).

@@ -33,7 +33,7 @@ step unit_tests             cargo test --workspace --locked
 step db_tests_really_ran    bash ci/assert_db_tests_ran.sh "${CARGO_TARGET_DIR:-target}/tmp"
 step broken_db_must_fail_ci bash ci/check_ci_fails_on_broken_db.sh
 step adversarial_run        bash -c "cargo run -q --locked -p quorum_adversarial -- --only A,B,C,D,M,L,E,I,F,G,J,K,N,Z,P,Q,R,S,W > '$OUT/adversarial.out' 2>&1"
-step adversarial_71_of_71   bash -c "grep -q '^71/71 checks passed as expected\\.' '$OUT/adversarial.out' && ! grep -q '^\\[FAIL\\]' '$OUT/adversarial.out'"
+step adversarial_71_of_71   bash -c "grep -q '^72/72 checks passed as expected\\.' '$OUT/adversarial.out' && ! grep -q '^\\[FAIL\\]' '$OUT/adversarial.out'"
 grep -E "^test result" "$OUT/unit_tests.log" | awk '{p+=$4; f+=$6} END {print "unit tests: passed",p,"failed",f}' | tee -a "$OUT/summary.txt"
 grep -E "checks passed" "$OUT/adversarial.out" | tee -a "$OUT/summary.txt"
 echo; [ $overall -eq 0 ] && echo "OVERALL: ALL STEPS PASSED" | tee -a "$OUT/summary.txt" || echo "OVERALL: AT LEAST ONE STEP FAILED" | tee -a "$OUT/summary.txt"

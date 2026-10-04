@@ -1,0 +1,2 @@
+[PASS] Z6: /healthz and /readyz answer 200 without credentials and expose no secret or DB detail: healthz=200 "ok" readyz=200 "ready" leak=false
+9/9 checks passed as expected.

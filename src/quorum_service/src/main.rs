@@ -442,6 +442,26 @@ struct RegisterInvoiceResp {
     merkle_root_hex: String,
 }
 
+/// Gap 11: liveness. No auth, no state, no secrets: "the process is serving HTTP".
+async fn healthz() -> &'static str {
+    "ok"
+}
+
+/// Gap 11: readiness. 200 only if a database connection can be checked out and
+/// answers a trivial query; otherwise 503 with a fixed, non-sensitive body
+/// (the underlying error is deliberately not echoed).
+async fn readyz(State(state): State<Arc<AppState>>) -> (StatusCode, &'static str) {
+    let ready = match state.db.get().await {
+        Ok(client) => client.simple_query("SELECT 1").await.is_ok(),
+        Err(_) => false,
+    };
+    if ready {
+        (StatusCode::OK, "ready")
+    } else {
+        (StatusCode::SERVICE_UNAVAILABLE, "database unavailable")
+    }
+}
+
 async fn register_invoice(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1252,6 +1272,8 @@ async fn main() {
         .route("/invoices/:id/settle", post(mark_settled))
         .route("/invoices/:id/prune", post(prune_ciphertext))
         .route("/invoices/:id/derive-key", post(derive_invoice_key))
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
         .route("/audit-log", get(get_audit_log))
         .route("/invoices/:id/merkle-proof", get(get_merkle_proof))
         .route("/regulators", post(register_regulator))

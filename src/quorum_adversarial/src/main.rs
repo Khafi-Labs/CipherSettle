@@ -1352,6 +1352,17 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
             }
         }
     }
+    // ---- Z6 (Gap 11): unauthenticated health endpoints exist and leak nothing.
+    let (st_h, body_h) = http_json(&service_addr, "GET", "/healthz", None, None).await;
+    let (st_r, body_r) = http_json(&service_addr, "GET", "/readyz", None, None).await;
+    let leak = [key, "postgres", "password", "ciphersettle_dev"]
+        .iter()
+        .any(|w| body_h.contains(w) || body_r.contains(w));
+    report.record(
+        "Z6: /healthz and /readyz answer 200 without credentials and expose no secret or DB detail",
+        st_h == 200 && st_r == 200 && !leak,
+        format!("healthz={st_h} {body_h:?} readyz={st_r} {body_r:?} leak={leak}"),
+    );
     let (st_after, _) = post_invoice(format!("z5-after-{run_id}")).await;
     report.record(
         "Z5: 112 malformed/hostile JSON bodies across all 7 POST routes never cause a 5xx or dropped connection, and the service still serves afterwards",

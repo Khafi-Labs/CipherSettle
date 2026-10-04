@@ -1,0 +1,2 @@
+[FAIL] Z6: /healthz and /readyz answer 200 without credentials and expose no secret or DB detail: healthz=404 "" readyz=404 "" leak=false
+8/9 checks passed as expected.
