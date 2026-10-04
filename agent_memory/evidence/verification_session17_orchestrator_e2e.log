@@ -1,0 +1,16 @@
+[phase3] spawned quorum_service (pid 15208) listening on 127.0.0.1:9300
+[phase3] service is up.
+[phase3] register_invoice -> 201 Created
+[phase3] duplicate register_invoice correctly rejected -> 409 Conflict
+[phase3] unauthorized derive-key correctly rejected -> 403 Forbidden
+[phase3] grant_settlement_access -> 200 OK
+[phase3] derive_invoice_key (issuer) -> 200 OK, sealed key opened and verified client-side via the live 3-of-5 quorum
+[phase3] derive_invoice_key (bank) -> 200 OK
+[phase3] register_regulator (admin) + derive_invoice_key (regulator) -> both 200 OK
+[phase3] non-admin register_regulator correctly rejected -> 403 Forbidden
+[phase3] mark_settled (bank) -> 200 OK
+[phase3] early prune_ciphertext correctly rejected -> 409 Conflict (retention window not yet elapsed)
+[phase3] waiting out the (demo-compressed) retention window...
+[phase3] prune_ciphertext (by a stranger, once eligible) -> 200 OK
+[phase3] re-pruning correctly rejected -> 409 Conflict
+[phase3] get_audit_log -> 7 entries for inv-phase3-1791132924849: ["invoice_registered", "settlement_access_granted", "key_derived_issuer", "key_derived_bank", "disclosure_request", "invoice_settled", "ciphertext_pruned"]

@@ -1,0 +1,27 @@
+date:    2026-10-04T16:41:47Z
+git:     a1f6f57afda5b9eeec6eca7399e468bbdee42ad2 
+rustc:   rustc 1.97.0 (2d8144b78 2026-07-07)
+pinned:  1.97
+
+EXECUTED + PASSED   toolchain_pinned
+EXECUTED + PASSED   dep_pin_policy
+EXECUTED + PASSED   fuzz_setup_consistency
+EXECUTED + PASSED   fuzz_gate_selftest
+EXECUTED + PASSED   fmt
+EXECUTED + PASSED   clippy
+EXECUTED + PASSED   fuzz_crate_typecheck
+EXECUTED + PASSED   build
+EXECUTED + PASSED   unit_tests
+EXECUTED + PASSED   db_tests_really_ran
+EXECUTED + PASSED   broken_db_must_fail_ci
+EXECUTED + PASSED   adversarial_run
+EXECUTED + PASSED   adversarial_71_of_71
+unit tests: passed 168 failed 0
+72/72 checks passed as expected.
+OVERALL: ALL STEPS PASSED
+NOT covered: GitHub Actions, cargo audit/deny, fuzzing, orchestrator e2e, power-loss rehearsal, Test E flake campaign.
+Session 17 additions (EXECUTED on rustc 1.97.0, git a1f6f57):
+  cargo audit 0.22.2 with ci/audit_ignores.sh (3 rustls-webpki ignores): rc=0, 1290 advisories, 202 deps
+  cargo deny 0.20.2 check: advisories ok, bans ok, licenses ok, sources ok
+  quorum_orchestrator end-to-end: rc=0, all phase3 steps OK, get_audit_log -> 7 entries
+STILL NOT covered: GitHub Actions, nightly libFuzzer, power-loss rehearsal, Test E flake campaign.

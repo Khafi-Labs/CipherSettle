@@ -197,3 +197,8 @@ Failing first: `--only R` on the previous build: 0 durable holders per acknowled
 - Z6 written first and FAILED (404) with the routes removed, then PASSED (`evidence/test_z6_*_session16.log`). Expected adversarial count is now 72/72 (ci.yml, run_local_regression.sh, runbook updated).
 - Gap 11 remains OPEN: no tracing, metrics, alerts, runbooks or drill. `/readyz` does not check node quorum liveness; the 503 path is untested.
 - Gaps still needing people/infrastructure: 2, 3 step 2, 4/5 (crypto review), 9, 10, 12, 15, 16. Gap 17 not reconciled (grep found no obvious stale 'not integrated' wording; needs a manual read).
+
+# Session 17: independent verification of the uploaded bundle (a1f6f57) on the PINNED toolchain
+- Adopted `ciphersettle_repo.bundle` (HEAD a1f6f57: Gap 8, fuzz prep, Gap 11 health slice) as the baseline. My own uncommitted session-13 Gap 8 work duplicated commit 021862b and was discarded (kept as a patch outside the repo).
+- EXECUTED on rustc 1.97.0 (the pin; the earlier sessions 14-16 ran 1.91.1): ci/run_local_regression.sh ALL STEPS PASSED: toolchain pinned, pin policy, fuzz setup/gate, fmt, clippy -D warnings, fuzz crate typecheck, build, 168 unit tests (DB markers ran), broken-DB negative test, adversarial 72/72 (incl. W, Z4-Z6). Plus cargo audit, cargo deny, orchestrator e2e (all pass). Evidence: `evidence/verification_session17_*`.
+- This closes caveat (e) of the Gap 8 findings (1.91.1-only results) and the "cargo audit/deny / orchestrator e2e not run" caveats from sessions 14-16. Still OPEN: GitHub Actions runs (20 green), nightly libFuzzer hours, power-loss rehearsal, Test E flake campaign.
