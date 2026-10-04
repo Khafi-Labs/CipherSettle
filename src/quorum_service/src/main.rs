@@ -48,12 +48,12 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use config::ServiceConfig;
 use error::ApiError;
-use quorum_client::{collect_sealed_derived_key, propose_and_cosign_and_replicate};
+use quorum_client::collect_sealed_derived_key;
 use quorum_core::config::b64_decode;
 use quorum_core::PublicKeySet;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio_rustls::TlsConnector;
 
 /// One configured API key, held only as its SHA-256 digest -- see
@@ -132,6 +132,9 @@ struct AppState {
     /// infrequent, and a plain mutex is simpler to reason about than a
     /// reader/writer lock for that access pattern.
     merkle_log: tokio::sync::Mutex<ciphersettle_core::MerkleLog>,
+    /// F-13: serializes audit appends so this process is a single proposer
+    /// (never held together with a DB connection or transaction).
+    audit_lock: tokio::sync::Mutex<()>,
 }
 
 fn now_ms() -> u64 {
@@ -237,6 +240,29 @@ mod api_key_auth_tests {
     }
 }
 
+/// Appends one event to the audit quorum, serialized through
+/// `AppState::audit_lock` so this process is never two concurrent proposers
+/// (F-13: concurrent proposers can split the quorum's votes). The lock is held
+/// across the network append but NEVER together with a DB connection or
+/// transaction (F-14: no DB <-> audit wait cycle). The retry budget and vote
+/// TTL are not widened; failure is typed and the caller records it.
+async fn append_audit_locked(
+    state: &AppState,
+    event: quorum_audit::AuditEvent,
+) -> Result<(), quorum_client::ProposeError> {
+    quorum_client::propose_audit_entry(
+        &state.connector,
+        &state.quorum_nodes,
+        state.threshold,
+        event,
+    )
+    .await
+    .map(|_| ())
+}
+
+/// Audit for an operation with NO state change (derive-key). Fail-closed:
+/// on failure the caller is denied (503) and the failure is recorded in
+/// `audit_failures` (best effort) and logged.
 async fn log_audit_event(
     state: &AppState,
     invoice_id: &str,
@@ -249,15 +275,128 @@ async fn log_audit_event(
         action: action.to_string(),
         timestamp_unix_ms: now_ms(),
     };
-    propose_and_cosign_and_replicate(
-        &state.connector,
-        &state.quorum_nodes,
-        state.threshold,
-        event,
-    )
-    .await
-    .map_err(ApiError::Internal)?;
+    let result = {
+        let _guard = state.audit_lock.lock().await;
+        append_audit_locked(state, event).await
+    };
+    if let Err(e) = result {
+        let msg = e.to_string();
+        eprintln!("[service] AUDIT FAILURE (denied, fail-closed) action={action} invoice={invoice_id}: {msg}");
+        if let Ok(client) = state.db.get().await {
+            let _ =
+                db::record_audit_failure(&client, now_ms() as i64, invoice_id, actor, action, &msg)
+                    .await;
+        }
+        return Err(ApiError::AuditUnavailable(format!(
+            "audit log unavailable, request denied: {msg}"
+        )));
+    }
     Ok(())
+}
+
+/// Backoff before the background drainer retries a failed outbox row.
+fn outbox_backoff_ms(attempts: i32) -> i64 {
+    let exp = attempts.clamp(1, 5) as u32;
+    (1_000i64 << exp).min(30_000)
+}
+
+/// Delivers one claimed outbox row. Caller holds `audit_lock`. No DB
+/// connection is held across the append.
+async fn deliver_outbox_row(state: &AppState, row: db::OutboxRow) -> Result<(), String> {
+    let event = quorum_audit::AuditEvent {
+        invoice_id: row.invoice_id.clone(),
+        actor: row.actor.clone(),
+        action: row.action.clone(),
+        timestamp_unix_ms: row.timestamp_ms as u64,
+    };
+    match append_audit_locked(state, event).await {
+        Ok(()) => {
+            match state.db.get().await {
+                Ok(client) => {
+                    if let Err(e) = db::outbox_mark_done(&client, row.id, now_ms() as i64).await {
+                        eprintln!("[service] outbox {} appended but mark-done failed (will be re-delivered after the stale-claim timeout; at-least-once): {e}", row.id);
+                    }
+                }
+                Err(e) => eprintln!(
+                    "[service] outbox {} appended but no db connection to mark done: {e}",
+                    row.id
+                ),
+            }
+            Ok(())
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            eprintln!(
+                "[service] AUDIT PENDING outbox_id={} action={} invoice={} attempts={}: {msg}",
+                row.id, row.action, row.invoice_id, row.attempts
+            );
+            let next = now_ms() as i64 + outbox_backoff_ms(row.attempts);
+            if let Ok(client) = state.db.get().await {
+                let _ = db::outbox_mark_failed(&client, row.id, &msg, next).await;
+            }
+            Err(msg)
+        }
+    }
+}
+
+/// Inline delivery attempt for the outbox row a handler just committed. If it
+/// cannot be delivered now the state change STANDS and the caller gets an
+/// explicit 202 `audit: pending` (never a bare 500 after a committed change).
+async fn audit_outbox_commit(state: &AppState, outbox_id: i64) -> Result<(), ApiError> {
+    let _guard = state.audit_lock.lock().await;
+    let claimed = {
+        let client = state
+            .db
+            .get()
+            .await
+            .map_err(|e| ApiError::Internal(format!("db pool error: {e}")))?;
+        db::outbox_claim(&client, now_ms() as i64, Some(outbox_id)).await?
+    };
+    match claimed {
+        Some(row) => deliver_outbox_row(state, row)
+            .await
+            .map_err(|detail| ApiError::AuditPending { outbox_id, detail }),
+        None => {
+            // Already delivered (e.g. by the background drainer while we
+            // waited for the lock) or being handled elsewhere.
+            let client = state
+                .db
+                .get()
+                .await
+                .map_err(|e| ApiError::Internal(format!("db pool error: {e}")))?;
+            match db::outbox_status(&client, outbox_id).await?.as_deref() {
+                Some("done") => Ok(()),
+                _ => Err(ApiError::AuditPending {
+                    outbox_id,
+                    detail: "queued; delivery in progress".to_string(),
+                }),
+            }
+        }
+    }
+}
+
+/// Background delivery of outbox rows whose inline attempt failed (or whose
+/// process crashed). Single in-process proposer, shared lock with the request
+/// path. Runs for the life of the process.
+async fn audit_outbox_drainer(state: Arc<AppState>) {
+    loop {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let _guard = state.audit_lock.lock().await;
+        let claimed = match state.db.get().await {
+            Ok(client) => db::outbox_claim(&client, now_ms() as i64, None).await,
+            Err(e) => {
+                eprintln!("[service] outbox drainer: no db connection: {e}");
+                continue;
+            }
+        };
+        match claimed {
+            Ok(Some(row)) => {
+                let _ = deliver_outbox_row(&state, row).await;
+            }
+            Ok(None) => {}
+            Err(e) => eprintln!("[service] outbox drainer: claim failed: {e}"),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -335,8 +474,8 @@ async fn register_invoice(
     )
     .await?;
 
-    match outcome {
-        db::RegisterOutcome::Inserted => {}
+    let outbox_id = match outcome {
+        db::RegisterOutcome::Inserted(id) => id,
         db::RegisterOutcome::NullifierAlreadyClaimed => {
             drop(client);
             return Err(ApiError::Conflict("nullifier already registered (replay/idempotency check — not a double-financing determination)".to_string()));
@@ -345,7 +484,7 @@ async fn register_invoice(
             drop(client);
             return Err(ApiError::Conflict("invoice_id already exists".to_string()));
         }
-    }
+    };
 
     // The DB row (source of truth that this commitment exists) is
     // already committed at this point. The in-memory log append and
@@ -367,7 +506,7 @@ async fn register_invoice(
     db::set_merkle_leaf_index(&client, &req.invoice_id, leaf_index as i64).await?;
     drop(client);
 
-    log_audit_event(&state, &req.invoice_id, &caller_id, "invoice_registered").await?;
+    audit_outbox_commit(&state, outbox_id).await?;
     Ok((
         StatusCode::CREATED,
         Json(RegisterInvoiceResp {
@@ -407,9 +546,20 @@ async fn grant_settlement_access(
             "only the issuer can grant settlement access".to_string(),
         ));
     }
-    db::set_bank(&client, &invoice_id, Some(&req.bank)).await?;
+    let outbox_id = db::set_bank(
+        &client,
+        &invoice_id,
+        Some(&req.bank),
+        &db::AuditIntent {
+            invoice_id: &invoice_id,
+            actor: &caller_id,
+            action: "settlement_access_granted",
+            timestamp_ms: now_ms() as i64,
+        },
+    )
+    .await?;
     drop(client);
-    log_audit_event(&state, &invoice_id, &caller_id, "settlement_access_granted").await?;
+    audit_outbox_commit(&state, outbox_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -441,9 +591,20 @@ async fn revoke_settlement_access(
             "no settlement access is currently granted for this invoice".to_string(),
         ));
     }
-    db::set_bank(&client, &invoice_id, None).await?;
+    let outbox_id = db::set_bank(
+        &client,
+        &invoice_id,
+        None,
+        &db::AuditIntent {
+            invoice_id: &invoice_id,
+            actor: &caller_id,
+            action: "settlement_access_revoked",
+            timestamp_ms: now_ms() as i64,
+        },
+    )
+    .await?;
     drop(client);
-    log_audit_event(&state, &invoice_id, &caller_id, "settlement_access_revoked").await?;
+    audit_outbox_commit(&state, outbox_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -475,9 +636,20 @@ async fn mark_settled(
     if invoice.status == "settled" {
         return Err(ApiError::Conflict("invoice is already settled".to_string()));
     }
-    db::mark_settled(&client, &invoice_id, now_ms() as i64).await?;
+    let outbox_id = db::mark_settled(
+        &client,
+        &invoice_id,
+        now_ms() as i64,
+        &db::AuditIntent {
+            invoice_id: &invoice_id,
+            actor: &caller_id,
+            action: "invoice_settled",
+            timestamp_ms: now_ms() as i64,
+        },
+    )
+    .await?;
     drop(client);
-    log_audit_event(&state, &invoice_id, &caller_id, "invoice_settled").await?;
+    audit_outbox_commit(&state, outbox_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -517,9 +689,19 @@ async fn prune_ciphertext(
             "invoice is not yet eligible for pruning (must be settled and past the retention window)".to_string(),
         ));
     }
-    db::prune_ciphertext(&client, &invoice_id).await?;
+    let outbox_id = db::prune_ciphertext(
+        &client,
+        &invoice_id,
+        &db::AuditIntent {
+            invoice_id: &invoice_id,
+            actor: &caller_id,
+            action: "ciphertext_pruned",
+            timestamp_ms: now_ms() as i64,
+        },
+    )
+    .await?;
     drop(client);
-    log_audit_event(&state, &invoice_id, &caller_id, "ciphertext_pruned").await?;
+    audit_outbox_commit(&state, outbox_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -769,9 +951,19 @@ async fn register_regulator(
         .get()
         .await
         .map_err(|e| ApiError::Internal(format!("db pool error: {e}")))?;
-    db::register_regulator(&client, &req.principal).await?;
+    let outbox_id = db::register_regulator(
+        &client,
+        &req.principal,
+        &db::AuditIntent {
+            invoice_id: "*",
+            actor: &caller_id,
+            action: "regulator_registered",
+            timestamp_ms: now_ms() as i64,
+        },
+    )
+    .await?;
     drop(client);
-    log_audit_event(&state, "*", &caller_id, "regulator_registered").await?;
+    audit_outbox_commit(&state, outbox_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -791,14 +983,24 @@ async fn revoke_regulator(
         .get()
         .await
         .map_err(|e| ApiError::Internal(format!("db pool error: {e}")))?;
-    let existed = db::revoke_regulator(&client, &principal).await?;
+    let revoked = db::revoke_regulator(
+        &client,
+        &principal,
+        &db::AuditIntent {
+            invoice_id: "*",
+            actor: &caller_id,
+            action: "regulator_revoked",
+            timestamp_ms: now_ms() as i64,
+        },
+    )
+    .await?;
     drop(client);
-    if !existed {
+    let Some(outbox_id) = revoked else {
         return Err(ApiError::Conflict(
             "that principal is not a registered regulator".to_string(),
         ));
-    }
-    log_audit_event(&state, "*", &caller_id, "regulator_revoked").await?;
+    };
+    audit_outbox_commit(&state, outbox_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -953,6 +1155,14 @@ async fn main() {
     // memory; `config` (which does hold the raw keys, read once from the
     // operator-provisioned JSON file) goes out of scope at the end of
     // `main` and is not referenced again after this point.
+    if b64_decode(&config.service_auth_key_b64).len() < quorum_core::MIN_AUTH_MASTER_BYTES {
+        eprintln!(
+            "[service] refusing to start: service_auth_key_b64 (the derive-auth MASTER secret, from which each node's key is derived) must decode to at least {} bytes",
+            quorum_core::MIN_AUTH_MASTER_BYTES
+        );
+        std::process::exit(1);
+    }
+
     let api_keys: Vec<ApiKeyEntry> = config
         .api_keys
         .iter()
@@ -988,7 +1198,9 @@ async fn main() {
             window_nanos: config.derive_rate_limit_window_ms,
         },
         merkle_log: tokio::sync::Mutex::new(merkle_log),
+        audit_lock: tokio::sync::Mutex::new(()),
     });
+    tokio::spawn(audit_outbox_drainer(state.clone()));
 
     let app = Router::new()
         .route("/invoices", post(register_invoice))

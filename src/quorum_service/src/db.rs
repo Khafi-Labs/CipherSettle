@@ -56,6 +56,41 @@ CREATE TABLE IF NOT EXISTS crypto_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- F-14: transactional outbox for audit events. Every state-changing handler
+-- inserts its audit event HERE in the SAME statement/transaction as the state
+-- change, so a committed change always has a durable record of the audit
+-- obligation. status: pending -> inflight -> done (or back to pending with
+-- last_error and a backoff on failure). Delivery to the audit quorum is
+-- at-least-once: a crash between the audit append and the `done` update can
+-- cause one duplicate audit entry after the stale-claim timeout.
+CREATE TABLE IF NOT EXISTS audit_outbox (
+    id BIGSERIAL PRIMARY KEY,
+    invoice_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    timestamp_unix_ms BIGINT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INT NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at_ms BIGINT NOT NULL,
+    claimed_at_ms BIGINT,
+    next_attempt_at_ms BIGINT NOT NULL DEFAULT 0,
+    done_at_ms BIGINT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_outbox_status ON audit_outbox (status, id);
+
+-- F-13: failed audit appends for operations that have NO state change to hold
+-- an outbox row (derive-key is fail-closed: the key is denied). Diagnosable
+-- record of every such denial.
+CREATE TABLE IF NOT EXISTS audit_failures (
+    id BIGSERIAL PRIMARY KEY,
+    at_ms BIGINT NOT NULL,
+    invoice_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    error TEXT NOT NULL
+);
 "#;
 
 /// Identifies the cryptographic scheme the stored invoice ciphertexts were
@@ -204,7 +239,8 @@ pub async fn init_schema(client: &Client) -> Result<(), tokio_postgres::Error> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegisterOutcome {
-    Inserted,
+    /// Carries the `audit_outbox.id` inserted in the same transaction.
+    Inserted(i64),
     NullifierAlreadyClaimed,
     InvoiceIdAlreadyExists,
 }
@@ -257,8 +293,16 @@ pub async fn register_invoice_tx(
         &[&invoice_id, &issuer, &ciphertext, &created_at_ms, &commitment_bytes],
     )
     .await?;
+    let outbox = tx
+        .query_one(
+            "INSERT INTO audit_outbox (invoice_id, actor, action, timestamp_unix_ms, created_at_ms) \
+             VALUES ($1, $2, 'invoice_registered', $3, $3) RETURNING id",
+            &[&invoice_id, &issuer, &created_at_ms],
+        )
+        .await?;
+    let outbox_id: i64 = outbox.get(0);
     tx.commit().await?;
-    Ok(RegisterOutcome::Inserted)
+    Ok(RegisterOutcome::Inserted(outbox_id))
 }
 
 /// Records the leaf index `MerkleLog::append` assigned this invoice's
@@ -337,45 +381,72 @@ pub async fn fetch_invoice(
     }))
 }
 
+/// The audit event that must be recorded for a state change. Inserted into
+/// `audit_outbox` atomically with the change (F-14).
+pub struct AuditIntent<'a> {
+    pub invoice_id: &'a str,
+    pub actor: &'a str,
+    pub action: &'a str,
+    pub timestamp_ms: i64,
+}
+
+const OUTBOX_COLS: &str = "(invoice_id, actor, action, timestamp_unix_ms, created_at_ms)";
+
 pub async fn set_bank(
     client: &Client,
     invoice_id: &str,
     bank: Option<&str>,
-) -> Result<(), tokio_postgres::Error> {
-    client
-        .execute(
-            "UPDATE invoices SET bank = $1 WHERE invoice_id = $2",
-            &[&bank, &invoice_id],
+    audit: &AuditIntent<'_>,
+) -> Result<i64, tokio_postgres::Error> {
+    // One statement = one atomic transaction: the update and its outbox row.
+    let row = client
+        .query_one(
+            &format!(
+                "WITH upd AS (UPDATE invoices SET bank = $1 WHERE invoice_id = $2 RETURNING invoice_id) \
+                 INSERT INTO audit_outbox {OUTBOX_COLS} \
+                 SELECT $2::text, $3::text, $4::text, $5::bigint, $5::bigint FROM upd RETURNING id"
+            ),
+            &[&bank, &invoice_id, &audit.actor, &audit.action, &audit.timestamp_ms],
         )
         .await?;
-    Ok(())
+    Ok(row.get(0))
 }
 
 pub async fn mark_settled(
     client: &Client,
     invoice_id: &str,
     settled_at_ms: i64,
-) -> Result<(), tokio_postgres::Error> {
-    client
-        .execute(
-            "UPDATE invoices SET status = 'settled', settled_at_ms = $1 WHERE invoice_id = $2",
-            &[&settled_at_ms, &invoice_id],
+    audit: &AuditIntent<'_>,
+) -> Result<i64, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            &format!(
+                "WITH upd AS (UPDATE invoices SET status = 'settled', settled_at_ms = $1 WHERE invoice_id = $2 RETURNING invoice_id) \
+                 INSERT INTO audit_outbox {OUTBOX_COLS} \
+                 SELECT $2::text, $3::text, $4::text, $5::bigint, $5::bigint FROM upd RETURNING id"
+            ),
+            &[&settled_at_ms, &invoice_id, &audit.actor, &audit.action, &audit.timestamp_ms],
         )
         .await?;
-    Ok(())
+    Ok(row.get(0))
 }
 
 pub async fn prune_ciphertext(
     client: &Client,
     invoice_id: &str,
-) -> Result<(), tokio_postgres::Error> {
-    client
-        .execute(
-            "UPDATE invoices SET ciphertext = NULL, ciphertext_pruned = true WHERE invoice_id = $1",
-            &[&invoice_id],
+    audit: &AuditIntent<'_>,
+) -> Result<i64, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            &format!(
+                "WITH upd AS (UPDATE invoices SET ciphertext = NULL, ciphertext_pruned = true WHERE invoice_id = $1 RETURNING invoice_id) \
+                 INSERT INTO audit_outbox {OUTBOX_COLS} \
+                 SELECT $1::text, $2::text, $3::text, $4::bigint, $4::bigint FROM upd RETURNING id"
+            ),
+            &[&invoice_id, &audit.actor, &audit.action, &audit.timestamp_ms],
         )
         .await?;
-    Ok(())
+    Ok(row.get(0))
 }
 
 pub async fn fetch_regulators(client: &Client) -> Result<Vec<String>, tokio_postgres::Error> {
@@ -388,14 +459,19 @@ pub async fn fetch_regulators(client: &Client) -> Result<Vec<String>, tokio_post
 pub async fn register_regulator(
     client: &Client,
     caller_id: &str,
-) -> Result<(), tokio_postgres::Error> {
-    client
-        .execute(
-            "INSERT INTO regulators (caller_id) VALUES ($1) ON CONFLICT (caller_id) DO NOTHING",
-            &[&caller_id],
+    audit: &AuditIntent<'_>,
+) -> Result<i64, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            &format!(
+                "WITH ins AS (INSERT INTO regulators (caller_id) VALUES ($1) ON CONFLICT (caller_id) DO NOTHING RETURNING caller_id) \
+                 INSERT INTO audit_outbox {OUTBOX_COLS} \
+                 VALUES ($2::text, $3::text, $4::text, $5::bigint, $5::bigint) RETURNING id"
+            ),
+            &[&caller_id, &audit.invoice_id, &audit.actor, &audit.action, &audit.timestamp_ms],
         )
         .await?;
-    Ok(())
+    Ok(row.get(0))
 }
 
 /// Returns `false` if the principal wasn't registered (so the caller can
@@ -404,11 +480,25 @@ pub async fn register_regulator(
 pub async fn revoke_regulator(
     client: &Client,
     caller_id: &str,
-) -> Result<bool, tokio_postgres::Error> {
-    let n = client
-        .execute("DELETE FROM regulators WHERE caller_id = $1", &[&caller_id])
+    audit: &AuditIntent<'_>,
+) -> Result<Option<i64>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            &format!(
+                "WITH del AS (DELETE FROM regulators WHERE caller_id = $1 RETURNING caller_id) \
+                 INSERT INTO audit_outbox {OUTBOX_COLS} \
+                 SELECT $2::text, $3::text, $4::text, $5::bigint, $5::bigint FROM del RETURNING id"
+            ),
+            &[
+                &caller_id,
+                &audit.invoice_id,
+                &audit.actor,
+                &audit.action,
+                &audit.timestamp_ms,
+            ],
+        )
         .await?;
-    Ok(n > 0)
+    Ok(row.map(|r| r.get(0)))
 }
 
 /// Fetches this caller's derive-call timestamps within the trailing
@@ -496,4 +586,105 @@ mod decision_matrix_tests {
             }
         }
     }
+}
+
+/// One outbox row claimed for delivery.
+#[derive(Debug, Clone)]
+pub struct OutboxRow {
+    pub id: i64,
+    pub invoice_id: String,
+    pub actor: String,
+    pub action: String,
+    pub timestamp_ms: i64,
+    pub attempts: i32,
+}
+
+/// A claim that has not been completed within this long is considered
+/// abandoned (crashed process) and may be claimed again (at-least-once).
+pub const OUTBOX_STALE_CLAIM_MS: i64 = 60_000;
+
+/// Claims one deliverable row (`only_id` for a specific row, else the oldest
+/// row whose backoff has elapsed). The claim is its own short statement: no
+/// DB transaction or connection is held while the audit append runs.
+pub async fn outbox_claim(
+    client: &Client,
+    now_ms: i64,
+    only_id: Option<i64>,
+) -> Result<Option<OutboxRow>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "UPDATE audit_outbox SET status = 'inflight', claimed_at_ms = $1, attempts = attempts + 1 \
+             WHERE id = (SELECT id FROM audit_outbox \
+                 WHERE ((status = 'pending' AND ($3::bigint IS NOT NULL OR next_attempt_at_ms <= $1)) \
+                        OR (status = 'inflight' AND claimed_at_ms < $1 - $2::bigint)) \
+                   AND ($3::bigint IS NULL OR id = $3) \
+                 ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED) \
+             RETURNING id, invoice_id, actor, action, timestamp_unix_ms, attempts",
+            &[&now_ms, &OUTBOX_STALE_CLAIM_MS, &only_id],
+        )
+        .await?;
+    Ok(row.map(|r| OutboxRow {
+        id: r.get(0),
+        invoice_id: r.get(1),
+        actor: r.get(2),
+        action: r.get(3),
+        timestamp_ms: r.get(4),
+        attempts: r.get(5),
+    }))
+}
+
+pub async fn outbox_mark_done(
+    client: &Client,
+    id: i64,
+    now_ms: i64,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            "UPDATE audit_outbox SET status = 'done', done_at_ms = $2, last_error = NULL WHERE id = $1",
+            &[&id, &now_ms],
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn outbox_mark_failed(
+    client: &Client,
+    id: i64,
+    error: &str,
+    next_attempt_at_ms: i64,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            "UPDATE audit_outbox SET status = 'pending', last_error = $2, next_attempt_at_ms = $3 WHERE id = $1",
+            &[&id, &error, &next_attempt_at_ms],
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn outbox_status(
+    client: &Client,
+    id: i64,
+) -> Result<Option<String>, tokio_postgres::Error> {
+    Ok(client
+        .query_opt("SELECT status FROM audit_outbox WHERE id = $1", &[&id])
+        .await?
+        .map(|r| r.get(0)))
+}
+
+pub async fn record_audit_failure(
+    client: &Client,
+    at_ms: i64,
+    invoice_id: &str,
+    actor: &str,
+    action: &str,
+    error: &str,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            "INSERT INTO audit_failures (at_ms, invoice_id, actor, action, error) VALUES ($1, $2, $3, $4, $5)",
+            &[&at_ms, &invoice_id, &actor, &action, &error],
+        )
+        .await?;
+    Ok(())
 }

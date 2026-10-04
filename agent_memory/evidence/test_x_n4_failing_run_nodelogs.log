@@ -1,0 +1,319 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+
+--- Test X: 4 concurrent audit proposers (opt-in probe) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9700
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9701
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9702
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9703
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9704
+[node 2 -> 0] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 1] DKG finalized.
+[node 0] DKG finalized.
+[node 0 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 2] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 3] DKG finalized.
+[node 4] DKG finalized.
+[node 0] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] co-signed (pending) audit entry seq 0.
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] co-signed (pending) audit entry seq 0.
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] co-signed (pending) audit entry seq 0.
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] co-signed (pending) audit entry seq 0.
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] co-signed (pending) audit entry seq 0.
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] co-signed (pending) audit entry seq 0.
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] co-signed (pending) audit entry seq 0.
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] co-signed (pending) audit entry seq 0.
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[node 4] co-signed (pending) audit entry seq 0.
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] co-signed (pending) audit entry seq 0.
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] co-signed (pending) audit entry seq 0.
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 4] co-signed (pending) audit entry seq 0.
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 2] co-signed (pending) audit entry seq 0.
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[FAIL] X: 4 concurrent audit proposers all succeed with no lost write: proposers=4 ok=0 entries_in_log=0 all_present=false chain_ok=true no_dup_seqs=true total=1672ms | p0: ERR in 1672ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on ; p1: ERR in 1613ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on ; p2: ERR in 1654ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on ; p3: ERR in 1636ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on
+
+=== Phase 4 Adversarial Test Summary ===
+  [FAIL] X: 4 concurrent audit proposers all succeed with no lost write -- proposers=4 ok=0 entries_in_log=0 all_present=false chain_ok=true no_dup_seqs=true total=1672ms | p0: ERR in 1672ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on ; p1: ERR in 1613ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on ; p2: ERR in 1654ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on ; p3: ERR in 1636ms: gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: on
+0/1 checks passed as expected.

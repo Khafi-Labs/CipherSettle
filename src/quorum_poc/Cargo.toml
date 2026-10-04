@@ -11,9 +11,6 @@ quorum_core = { path = "../quorum_core" }
 rand = "0.8"
 sha2 = "0.10"
 
-# --- Sandbox-only pin, NOT a real production dependency policy ---
-zeroize = "=1.5.7"
-
 [[bin]]
 name = "quorum_poc"
 path = "src/main.rs"

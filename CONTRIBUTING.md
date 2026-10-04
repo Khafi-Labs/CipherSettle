@@ -16,7 +16,7 @@ objectives and maintain the integrity of established phases.
 
 ## Prerequisites
 To build and test CipherSettle, you will need the following:
-- **Rustc/Cargo**: 1.75.0, as pinned by `rust-toolchain.toml`
+- **Rustc/Cargo**: 1.97, as pinned by `rust-toolchain.toml`
 - **PostgreSQL**: 16 (required for Phase 3+ functionality and for the
   `quorum_service` integration tests)
 - **Linux with `iptables`**: required for the Phase 4 network-partition test
@@ -35,18 +35,25 @@ To build and test CipherSettle, you will need the following:
    why.
 
 3. For the tests that need a database, start Postgres and create the test
-   database:
+   databases with the shared script (idempotent; test-only credentials, never
+   reuse them anywhere real):
    ```bash
    sudo apt-get install postgresql
    sudo pg_ctlcluster 16 main start
    sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'ciphersettle_dev';"
-   sudo -u postgres psql -c "CREATE DATABASE ciphersettle_test;"
-   export TEST_DATABASE_URL="postgres://postgres:ciphersettle_dev@127.0.0.1:5432/ciphersettle_test"
+   bash ci/setup_test_db.sh        # creates ciphersettle_test and ciphersettle_adversarial
+   export CIPHERSETTLE_TEST_DB_URL="postgres://postgres:ciphersettle_dev@127.0.0.1:5432/ciphersettle_test"
+   export CIPHERSETTLE_TEST_DB_REQUIRED=1   # unreachable DB => test FAILS instead of skipping
    ```
 
-   `quorum_service/tests/db_pool_concurrency.rs` self-skips when
-   `TEST_DATABASE_URL` is unset, so a `cargo test` run without this step will
-   report success while quietly not exercising that test.
+   The variable the code reads is `CIPHERSETTLE_TEST_DB_URL`. (Earlier versions
+   of this file said `TEST_DATABASE_URL`; nothing reads that, and following it
+   produced a green run in which the database tests were silently skipped.)
+   Without `CIPHERSETTLE_TEST_DB_REQUIRED=1`, `cargo test` reports a skipped DB
+   test as `ok`. To check that they really ran, after `cargo test` run:
+   ```bash
+   bash ci/assert_db_tests_ran.sh   # fails unless every DB test marker says `ran`
+   ```
 
 ## Testing requirements
 All pull requests must pass the project's validation suite. Before submitting
@@ -61,9 +68,9 @@ bash ci/check_pin_policy.sh
 
 These are exactly what `.github/workflows/ci.yml` runs. `cargo deny check`
 enforces the policy in `deny.toml` (advisories, licenses, dependency sources);
-note that `cargo-deny` itself must be installed under a current stable
-toolchain rather than the pinned 1.75, since it does not build there. This is
-why CI runs it in a separate job from the workspace build.
+`cargo-audit` and `cargo-deny` are installed with `cargo install --locked`
+(CI pins `cargo-audit 0.22.2`, `cargo-deny 0.20.2`) and run in a separate job
+from the workspace build.
 
 ## Code style
 Please adhere to the standard Rust formatting guidelines. Ensure `cargo fmt`

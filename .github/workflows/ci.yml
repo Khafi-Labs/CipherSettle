@@ -1,0 +1,160 @@
+# Gap 6. Every `run:` command below is a plain shell command that can be
+# executed locally; see agent_memory/SESSION_01_BASELINE_AND_PLAN.md for which
+# have been executed and which (the GitHub-only parts) have NOT.
+#
+# Third-party actions are pinned to full commit SHAs (resolved with
+# `git ls-remote` on 2026-10-02), not mutable tags.
+name: ci
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"   # daily: new advisories can break a green tree
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CIPHERSETTLE_TEST_DB_URL: postgres://postgres:ciphersettle_dev@127.0.0.1:5432/ciphersettle_test
+
+jobs:
+  lint:
+    name: fmt, clippy, pin policy (pinned toolchain)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        run: |
+          v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$v" --profile minimal --component clippy --component rustfmt
+          rustup default "$v"
+          rustc --version
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: lint-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+      - run: bash ci/check_pin_policy.sh
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --locked --all-targets -- -D warnings
+
+  test:
+    name: build + test with Postgres (DB required)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ciphersettle_dev   # test-only credential
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      # A DB test that cannot reach Postgres FAILS instead of skipping.
+      CIPHERSETTLE_TEST_DB_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        run: |
+          v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$v" --profile minimal
+          rustup default "$v"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: test-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+      - name: Create test databases
+        run: bash ci/setup_test_db.sh
+      - run: cargo build --workspace --locked --all-targets
+      - run: cargo test --workspace --locked
+      # Belt and braces: independent of the env var above, prove the DB tests
+      # genuinely ran (a skip is reported by cargo as a pass).
+      - name: Assert DB tests ran, not skipped
+        run: bash ci/assert_db_tests_ran.sh
+
+  adversarial:
+    name: adversarial suite (groups A-G, I-N, P, Q, R, S, Z; H needs iptables, see notes)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ciphersettle_dev   # test-only credential
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        run: |
+          v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$v" --profile minimal
+          rustup default "$v"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: adv-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+      - run: bash ci/setup_test_db.sh
+      - run: cargo build --workspace --locked --all-targets
+      # The runner exits 1 if ANY check fails, and records a skipped group
+      # (e.g. no Postgres) as a failure, so a skip cannot pass here.
+      - name: Run adversarial suite
+        run: cargo run --locked -p quorum_adversarial -- --only A,B,C,D,M,L,E,I,F,G,J,K,N,Z,P,Q,R,S | tee adversarial.log
+      - name: Require the full expected check count
+        run: |
+          grep -q '^62/62 checks passed as expected\.' adversarial.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: adversarial-log
+          path: adversarial.log
+
+  db-guard-negative:
+    name: negative test, a broken DB setup must FAIL, not skip
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        run: |
+          v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$v" --profile minimal
+          rustup default "$v"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: neg-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+      - run: bash ci/check_ci_fails_on_broken_db.sh
+
+  supply-chain:
+    name: cargo audit + cargo deny
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          # Versions pinned to the ones actually executed locally (2026-10-03).
+          cargo install cargo-audit --locked --version 0.22.2
+          cargo install cargo-deny --locked --version 0.20.2
+      # Accepted advisories come from deny.toml only; see ci/audit_ignores.sh.
+      - run: cargo audit $(bash ci/audit_ignores.sh)
+      - run: cargo deny check

@@ -21,6 +21,7 @@
 //!     catches it the moment that node's copy is compared against any
 //!     other node's, because the other nodes never saw the rewritten
 //!     history and won't have co-signed it.
+//!
 //! That second case is exactly why co-signatures and cross-node
 //! reconciliation both matter: a self-consistent *local* chain proves
 //! nothing on its own. Multi-node signing plus reconciliation is what
@@ -254,7 +255,7 @@ impl AuditLog {
     pub fn filter_by_invoice<'a>(&'a self, invoice_id: Option<&str>) -> Vec<&'a AuditEntry> {
         self.entries
             .iter()
-            .filter(|e| invoice_id.map_or(true, |id| e.event.invoice_id == id))
+            .filter(|e| invoice_id.is_none_or(|id| e.event.invoice_id == id))
             .collect()
     }
 
@@ -460,7 +461,7 @@ impl VoteSlot {
 
     /// An entry at `committed_seq` was appended: any vote at or below it is resolved.
     pub fn on_commit(&mut self, committed_seq: u64) {
-        if self.pending.map_or(false, |p| p.seq <= committed_seq) {
+        if self.pending.is_some_and(|p| p.seq <= committed_seq) {
             self.pending = None;
         }
     }

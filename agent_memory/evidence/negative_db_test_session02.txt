@@ -1,0 +1,8 @@
+N1/N2: REQUIRED=1 with an unreachable DB
+  ok:   cargo test exits non-zero (rc=101)
+  ok:   output contains DB_REQUIRED_BUT_UNREACHABLE
+  ok:   assert_db_tests_ran.sh fails (rc=1)
+N3: REQUIRED unset, unreachable DB (silent-skip case)
+  ok:   cargo test alone reports success (rc=0), which is exactly the hazard
+  ok:   assert_db_tests_ran.sh still fails (rc=1)
+RESULT: broken DB setup fails CI as required

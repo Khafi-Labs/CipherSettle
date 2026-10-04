@@ -1,0 +1,58 @@
+    Checking typenum v1.20.1
+    Checking zeroize v1.9.0
+    Checking blst v0.3.17
+    Checking blstrs v0.7.1
+    Checking generic-array v0.14.7
+    Checking hybrid-array v0.4.15
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+    Checking digest v0.10.7
+    Checking cmov v0.5.4
+    Checking sha2 v0.10.9
+    Checking curve25519-dalek v4.1.3
+    Checking quorum_vetseal v0.1.0 (/home/claude/repo/src/quorum_vetseal)
+    Checking hmac v0.12.1
+    Checking ctutils v0.4.2
+    Checking crypto-common v0.2.2
+    Checking ed25519-dalek v2.1.1
+    Checking quorum_audit v0.1.0 (/home/claude/repo/src/quorum_audit)
+    Checking quorum_core v0.1.0 (/home/claude/repo/src/quorum_core)
+    Checking block-buffer v0.12.1
+    Checking const-oid v0.10.2
+    Checking digest v0.11.3
+    Checking cpufeatures v0.3.1
+    Checking rand_core v0.10.1
+    Checking futures-task v0.3.34
+    Checking slab v0.4.12
+    Checking getrandom v0.4.3
+    Checking futures-util v0.3.34
+    Checking chacha20 v0.10.2
+    Checking rand v0.10.3
+    Checking sha2 v0.11.0
+    Checking hmac v0.13.0
+    Checking md-5 v0.11.0
+    Checking phf_shared v0.13.1
+    Checking postgres-protocol v0.6.12
+    Checking ciphersettle_core v0.1.0 (/home/claude/repo/src/ciphersettle_core)
+    Checking postgres-types v0.2.14
+    Checking phf v0.13.1
+    Checking quorum_client v0.1.0 (/home/claude/repo/src/quorum_client)
+    Checking whoami v2.1.3
+    Checking num-conv v0.2.2
+    Checking deranged v0.5.8
+    Checking time-core v0.1.9
+    Checking tokio-postgres v0.7.18
+    Checking time v0.3.55
+    Checking yasna v0.5.2
+    Checking axum-core v0.4.5
+    Checking rcgen v0.12.1
+    Checking tower v0.5.3
+    Checking deadpool-postgres v0.12.1
+    Checking axum v0.7.9
+    Checking quorum_orchestrator v0.1.0 (/home/claude/repo/src/quorum_orchestrator)
+    Checking quorum_adversarial v0.1.0 (/home/claude/repo/src/quorum_adversarial)
+    Checking quorum_service v0.1.0 (/home/claude/repo/src/quorum_service)
+    Checking quorum_poc v0.1.0 (/home/claude/repo/src/quorum_poc)
+    Checking quorum_node v0.1.0 (/home/claude/repo/src/quorum_node)
+    Checking quorum_notary v0.1.0 (/home/claude/repo/src/quorum_notary)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.48s

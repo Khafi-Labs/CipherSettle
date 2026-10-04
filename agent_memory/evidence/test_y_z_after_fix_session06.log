@@ -1,0 +1,27 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+
+--- Test Y: forced vote split (opt-in, F-13) ---
+[PASS] Y1: forced 2/2/1 vote split -> proposer fails explicitly, nothing commits (F-13 hazard pinned): votes_granted=5/5 propose_err=true entries_in_all_logs=0 elapsed=923ms err=audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the l
+[PASS] Y3: the stalled proposal is reported as a typed ProposeError::Contention (not an outage, not a bare string): Err(Contention { attempts: 8, signed: 0, needed: 3, rejections: 5 })
+[PASS] Y2: after the 5 s vote TTL the same proposal succeeds (only TTL expiry unblocks the split): ok=true err=None
+
+--- Test Z: service audit semantics (F-13/F-14) ---
+[PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change): split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+[PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record: invoice_row_exists=true outbox_status=Ok(Some("pending"))
+[PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence): drained=true entries_for_invoice=1 chain_ok=true after=7277ms
+[PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention): statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+[PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate): pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+[PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table): invoices_without_outbox_record=0
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] Y1: forced 2/2/1 vote split -> proposer fails explicitly, nothing commits (F-13 hazard pinned) -- votes_granted=5/5 propose_err=true entries_in_all_logs=0 elapsed=923ms err=audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the l
+  [PASS] Y3: the stalled proposal is reported as a typed ProposeError::Contention (not an outage, not a bare string) -- Err(Contention { attempts: 8, signed: 0, needed: 3, rejections: 5 })
+  [PASS] Y2: after the 5 s vote TTL the same proposal succeeds (only TTL expiry unblocks the split) -- ok=true err=None
+  [PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change) -- split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+  [PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record -- invoice_row_exists=true outbox_status=Ok(Some("pending"))
+  [PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence) -- drained=true entries_for_invoice=1 chain_ok=true after=7277ms
+  [PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention) -- statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+  [PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate) -- pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+  [PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table) -- invoices_without_outbox_record=0
+9/9 checks passed as expected.

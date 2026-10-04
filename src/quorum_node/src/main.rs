@@ -32,7 +32,9 @@
 //!   `BufReader::lines()`; see that module's doc for the cap and why it
 //!   was set where it was.
 
+mod audit_store;
 mod bounded_line_reader;
+mod share_store;
 mod tls;
 
 use bounded_line_reader::BoundedLineReader;
@@ -46,6 +48,7 @@ use quorum_core::{
 use quorum_core::{PublicKeySet, SecretKeyShare};
 use rand::thread_rng;
 use rustls::{Certificate, PrivateKey, ServerName};
+use share_store::{FileKek, ShareStore};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::Arc;
@@ -94,6 +97,126 @@ struct Shared {
     /// T1-1: the single entry this node has co-signed (voted for) at the
     /// log's next seq but not yet seen committed. See AppendAuditEntry.
     pending_audit: Mutex<quorum_audit::VoteSlot>,
+    /// Gap 1: set ONLY during the one-time ceremony; the finalized share is
+    /// persisted through it BEFORE this node reports ready.
+    ceremony_store: Option<ShareStore>,
+    node_n: usize,
+}
+
+/// Gap 1: how this process obtains its share.
+enum Boot {
+    /// Legacy ephemeral share (explicit opt-in only; throwaway quorums).
+    Ephemeral,
+    /// One-time ceremony: no share file exists and `init_ceremony` is set.
+    Ceremony(ShareStore),
+    /// Normal start: share file decrypted and verified against the group key.
+    Resume {
+        secret_share: SecretKeyShare,
+        group_pks: PublicKeySet,
+    },
+}
+
+fn fatal(msg: &str) -> ! {
+    eprintln!("[node] FATAL: {msg}");
+    std::process::exit(2)
+}
+
+fn parse_hex32(s: &str) -> Result<[u8; 32], String> {
+    let s = s.trim();
+    if s.len() != 64 || !s.is_ascii() {
+        return Err("expected 64 hex characters".to_string());
+    }
+    let mut out = [0u8; 32];
+    for (i, b) in out.iter_mut().enumerate() {
+        let pair = s
+            .get(2 * i..2 * i + 2)
+            .ok_or_else(|| "invalid hex".to_string())?;
+        *b = u8::from_str_radix(pair, 16).map_err(|_| "invalid hex".to_string())?;
+    }
+    Ok(out)
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Every error here is FATAL: a node whose persistence config cannot produce
+/// its share must never fall back to a fresh DKG (it would orphan every key).
+fn decide_boot(config: &NodeConfig) -> Result<Boot, String> {
+    let Some(p) = &config.persistence else {
+        if !config.allow_ephemeral_share {
+            return Err("share persistence is not configured (no `persistence` section) and \
+                 allow_ephemeral_share is not set. Refusing to start: an ephemeral share is destroyed on \
+                 restart, which orphans every derived key. Configure `persistence`, or (throwaway test \
+                 quorums only) set allow_ephemeral_share=true."
+                .to_string());
+        }
+        eprintln!(
+            "[node {}] WARNING: share persistence is NOT configured; restarting this node re-runs DKG \
+             and produces a NEW group key. Never use this mode with real data.",
+            config.node_id
+        );
+        return Ok(Boot::Ephemeral);
+    };
+    let kek = FileKek::load(Path::new(&p.kek_file)).map_err(|e| e.to_string())?;
+    let store = ShareStore::new(std::path::PathBuf::from(&p.dir), Box::new(kek));
+    let pin = match &p.expected_group_pubkey_sha256_hex {
+        Some(h) => {
+            Some(parse_hex32(h).map_err(|e| format!("expected_group_pubkey_sha256_hex: {e}"))?)
+        }
+        None => None,
+    };
+    let exists = store.exists().map_err(|e| e.to_string())?;
+    match (exists, p.init_ceremony) {
+        (true, true) => Err(
+            "init_ceremony=true but a share file already exists; refusing to \
+             overwrite or re-run DKG. Set init_ceremony=false to resume."
+                .to_string(),
+        ),
+        (false, false) => Err(
+            "no share file found and init_ceremony=false; refusing to run DKG on a \
+             normal start. Restore the share file from backup, or run the one-time ceremony \
+             (init_ceremony=true)."
+                .to_string(),
+        ),
+        (false, true) => {
+            eprintln!(
+                "[node {}] one-time ceremony: no share exists; running DKG and persisting the result",
+                config.node_id
+            );
+            Ok(Boot::Ceremony(store))
+        }
+        (true, false) => {
+            let (secret_share, group_pks) = store
+                .load(config.node_id, config.n, config.t, pin.as_ref())
+                .map_err(|e| e.to_string())?;
+            eprintln!(
+                "[node {}] share loaded from disk; group public key fingerprint sha256={}",
+                config.node_id,
+                hex(&group_pks.fingerprint_sha256())
+            );
+            Ok(Boot::Resume {
+                secret_share,
+                group_pks,
+            })
+        }
+    }
+}
+
+/// Publishes the group public key, then the ready marker, atomically. A
+/// failure to publish is fatal: readiness must never be reported without the
+/// files that other components read.
+fn write_pubkey_and_ready(pubkey_file: &str, ready_file: &str, group_pks: &PublicKeySet) {
+    let pubkey_json = match serde_json::to_vec(group_pks) {
+        Ok(j) => j,
+        Err(e) => fatal(&format!("could not serialize the group public key: {e}")),
+    };
+    if let Err(e) = audit_store::write_atomic(Path::new(pubkey_file), &pubkey_json) {
+        fatal(&format!("could not write {pubkey_file}: {e}"));
+    }
+    if let Err(e) = audit_store::write_atomic(Path::new(ready_file), b"ready\n") {
+        fatal(&format!("could not write {ready_file}: {e}"));
+    }
 }
 
 /// How long a vote blocks a *different* entry at the same seq. Trade-off
@@ -117,6 +240,31 @@ fn mono_ms() -> u64 {
 
 #[tokio::main]
 async fn main() {
+    // Provisioning helper (Gap 3 step 1): prints the base64 derive-auth key for
+    // node <id> from the service's master secret. The output is a SECRET; put
+    // it only in that node's config (`service_auth_key_b64`).
+    //   quorum_node derive-auth-key <master_b64> <node_id>
+    if std::env::args().nth(1).as_deref() == Some("derive-auth-key") {
+        let (Some(master_b64), Some(id)) = (
+            std::env::args().nth(2),
+            std::env::args()
+                .nth(3)
+                .and_then(|v| v.parse::<usize>().ok()),
+        ) else {
+            fatal("usage: quorum_node derive-auth-key <master_b64> <node_id>");
+        };
+        let master = b64_decode(&master_b64);
+        if master.len() < quorum_core::MIN_AUTH_MASTER_BYTES {
+            fatal("master secret must decode to at least 32 bytes");
+        }
+        use base64::Engine;
+        println!(
+            "{}",
+            base64::engine::general_purpose::STANDARD
+                .encode(quorum_core::derive_node_auth_key(&master, id))
+        );
+        return;
+    }
     let config_path = std::env::args()
         .nth(1)
         .expect("usage: quorum_node <config.json>");
@@ -130,6 +278,13 @@ async fn main() {
         "[node {}] starting: n={} t={} listen={}",
         config.node_id, config.n, config.t, config.listen_addr
     );
+
+    // Gap 1: decide the boot mode FIRST, so a refusal happens before any port
+    // is bound or any DKG message is sent.
+    let boot = match decide_boot(&config) {
+        Ok(b) => b,
+        Err(e) => fatal(&e),
+    };
 
     let own_cert = Certificate(b64_decode(&config.cert_der_b64));
     let own_key = PrivateKey(b64_decode(&config.key_der_b64));
@@ -178,11 +333,15 @@ async fn main() {
     // Pre-compute every peer's share now, before the session moves behind
     // a shared lock -- outbound push tasks don't need session access at
     // all, only these two already-computed values.
-    let outbound_shares: Vec<([u8; 32], usize, String)> = config
-        .peers
-        .iter()
-        .map(|p| (session.share_for(p.id), p.id, p.addr.clone()))
-        .collect();
+    let outbound_shares: Vec<([u8; 32], usize, String)> = if matches!(boot, Boot::Resume { .. }) {
+        Vec::new() // resuming: this node takes no part in any DKG
+    } else {
+        config
+            .peers
+            .iter()
+            .map(|p| (session.share_for(p.id), p.id, p.addr.clone()))
+            .collect()
+    };
 
     let is_ready_already = session.is_ready(); // only true if n == 1, i.e. never in practice
 
@@ -221,13 +380,40 @@ async fn main() {
         .collect();
     audit_pubkeys.insert(config.node_id, audit_keypair.verifying_key());
 
-    let audit_log = load_or_init_audit_log(&config.audit_log_file);
+    // Gap 13: a missing file is a first start; a file that exists but is
+    // corrupt / truncated / has a broken hash chain is FATAL (never silently
+    // replaced by an empty log, which would erase audit evidence).
+    let audit_log = match audit_store::load_audit_log(Path::new(&config.audit_log_file)) {
+        Ok(l) => l,
+        Err(e) => fatal(&format!(
+            "audit log file {} cannot be used: {e}. Refusing to start; restore it from backup or investigate.",
+            config.audit_log_file
+        )),
+    };
     let service_auth_key = b64_decode(&config.service_auth_key_b64);
 
+    let (initial_state, ceremony_store, resumed_pks) = match boot {
+        Boot::Resume {
+            secret_share,
+            group_pks,
+        } => {
+            let pks = group_pks.clone();
+            (
+                NodeState::Ready {
+                    secret_share,
+                    group_pks,
+                },
+                None,
+                Some(pks),
+            )
+        }
+        Boot::Ceremony(store) => (NodeState::Dkg(session), Some(store), None),
+        Boot::Ephemeral => (NodeState::Dkg(session), None, None),
+    };
     let shared = Arc::new(Shared {
         node_id: config.node_id,
         t: config.t,
-        state: Mutex::new(NodeState::Dkg(session)),
+        state: Mutex::new(initial_state),
         ready_file: config.ready_file.clone(),
         pubkey_file: config.pubkey_file.clone(),
         audit_log: Mutex::new(audit_log),
@@ -238,8 +424,10 @@ async fn main() {
         used_derive_nonces: Mutex::new(HashMap::new()),
         process_start_unix_ms: now_unix_ms(),
         pending_audit: Mutex::new(quorum_audit::VoteSlot::new()),
+        ceremony_store,
+        node_n: config.n,
     });
-    if is_ready_already {
+    if is_ready_already && resumed_pks.is_none() {
         finalize_if_ready(&shared).await;
     }
 
@@ -271,6 +459,15 @@ async fn main() {
                 });
             }
         });
+    }
+
+    // Resume mode: ready as soon as listening (after the bind above).
+    if let Some(pks) = &resumed_pks {
+        write_pubkey_and_ready(&config.pubkey_file, &config.ready_file, pks);
+        eprintln!(
+            "[node {}] resumed from persisted share; DKG skipped.",
+            config.node_id
+        );
     }
 
     // --- Outbound: push our commitment + this peer's private share to
@@ -619,7 +816,9 @@ async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
                 signature: sig,
             })
         }
-        Message::AuditEntrySigned { .. } | Message::AuditAppendRejected { .. } => {
+        Message::AuditEntrySigned { .. }
+        | Message::AuditAppendRejected { .. }
+        | Message::AuditEntryCommitted { .. } => {
             // Only the proposer (client/coordinator) should receive these.
             None
         }
@@ -664,19 +863,49 @@ async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
                     );
                     return None;
                 }
+                // Persist-then-swap: the in-memory log only changes after the
+                // new state is durable, so memory never runs ahead of disk.
+                let mut updated = (*log).clone();
                 for (id, sig) in entry.signatures {
                     if valid_ids.contains(&id) {
-                        let _ = log.merge_signature(seq, id, sig);
+                        let _ = updated.merge_signature(seq, id, sig);
                     }
                 }
-                persist_audit_log(&shared.audit_log_file, &log);
-                return None;
+                // Whether or not merging the extra signatures could be persisted,
+                // the entry itself is already durable here (the in-memory log
+                // only ever holds durable state), so this node can acknowledge.
+                match audit_store::persist_audit_log(Path::new(&shared.audit_log_file), &updated) {
+                    Ok(()) => *log = updated,
+                    Err(e) => eprintln!(
+                        "[node {}] could not persist merged signatures for seq {seq}: {e}; keeping the previous (durable) state",
+                        shared.node_id
+                    ),
+                }
+                return Some(Message::AuditEntryCommitted {
+                    node_id: shared.node_id,
+                    seq,
+                    entry_hash: log.entries[seq as usize].entry_hash,
+                });
             }
             // R-1: strip unverified signatures before the entry becomes part of the log.
             entry.signatures.retain(|id, _| valid_ids.contains(id));
-            match log.try_append(entry) {
+            // Persist-then-swap (Gap 13): the entry becomes part of the node's
+            // log only once the new log is durable on disk. If persisting
+            // fails the node does NOT claim the entry (it keeps its last
+            // durable state and its pending vote) and says so loudly.
+            let mut updated = (*log).clone();
+            match updated.try_append(entry) {
                 Ok(()) => {
-                    persist_audit_log(&shared.audit_log_file, &log);
+                    if let Err(e) =
+                        audit_store::persist_audit_log(Path::new(&shared.audit_log_file), &updated)
+                    {
+                        eprintln!(
+                            "[node {}] PERSIST FAILED for audit entry seq {seq}: {e}; entry NOT committed on this node",
+                            shared.node_id
+                        );
+                        return None;
+                    }
+                    *log = updated;
                     {
                         shared.pending_audit.lock().await.on_commit(seq);
                     }
@@ -684,6 +913,11 @@ async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
                         "[node {}] replicated audit entry seq {seq} ({valid_sigs} valid co-signatures).",
                         shared.node_id
                     );
+                    return Some(Message::AuditEntryCommitted {
+                        node_id: shared.node_id,
+                        seq,
+                        entry_hash: log.entries[seq as usize].entry_hash,
+                    });
                 }
                 Err(reason) => {
                     eprintln!(
@@ -707,25 +941,6 @@ async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
     }
 }
 
-fn load_or_init_audit_log(path: &str) -> AuditLog {
-    match std::fs::read(path) {
-        Ok(raw) => serde_json::from_slice(&raw).unwrap_or_else(|e| {
-            eprintln!("audit log file {path} is corrupt ({e}); starting from an empty log");
-            AuditLog::default()
-        }),
-        Err(_) => AuditLog::default(),
-    }
-}
-
-fn persist_audit_log(path: &str, log: &AuditLog) {
-    if let Some(parent) = Path::new(path).parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(json) = serde_json::to_vec_pretty(log) {
-        let _ = std::fs::write(path, json);
-    }
-}
-
 async fn finalize_if_ready(shared: &Arc<Shared>) {
     let mut state = shared.state.lock().await;
     let ready = matches!(&*state, NodeState::Dkg(s) if s.is_ready());
@@ -741,18 +956,30 @@ async fn finalize_if_ready(shared: &Arc<Shared>) {
     match session.finalize() {
         Ok((secret_share, group_pks)) => {
             eprintln!("[node {}] DKG finalized.", shared.node_id);
-            if let Some(parent) = Path::new(&shared.ready_file).parent() {
-                let _ = std::fs::create_dir_all(parent);
+            // Gap 1: in the one-time ceremony the share is made durable BEFORE
+            // this node reports ready. If it cannot be persisted, exit.
+            if let Some(store) = &shared.ceremony_store {
+                match store.create_new(
+                    shared.node_id,
+                    shared.node_n,
+                    shared.t,
+                    &secret_share,
+                    &group_pks,
+                ) {
+                    Ok(()) => eprintln!(
+                        "[node {}] share persisted (encrypted). Pin this group public key fingerprint in config: sha256={}",
+                        shared.node_id,
+                        hex(&group_pks.fingerprint_sha256())
+                    ),
+                    Err(e) => fatal(&format!("could not persist the DKG share: {e}")),
+                }
             }
-            let pubkey_json =
-                serde_json::to_vec(&group_pks).expect("PublicKeySet always serializes");
-            let _ = std::fs::write(&shared.pubkey_file, pubkey_json);
+            write_pubkey_and_ready(&shared.pubkey_file, &shared.ready_file, &group_pks);
             *state = NodeState::Ready {
                 secret_share,
                 group_pks,
             };
             drop(state);
-            let _ = std::fs::write(&shared.ready_file, b"ready\n");
         }
         Err(e) => {
             eprintln!(

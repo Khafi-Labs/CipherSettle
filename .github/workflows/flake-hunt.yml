@@ -1,0 +1,39 @@
+# Gap 6: Test E flakiness campaign. Manual. No retries: any failing run keeps
+# its full log in the uploaded artifact for diagnosis.
+name: flake-hunt
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:       { description: "number of Test E runs", default: "100" }
+      stress_cpu: { description: "stress-ng CPU workers (0 = idle)", default: "4" }
+      stress_vm:  { description: "stress-ng memory workers", default: "1" }
+      proposers:  { description: "concurrent audit proposers (empty = original 2-proposer Test E; N>=3 runs probe group X)", default: "" }
+
+permissions:
+  contents: read
+
+jobs:
+  hunt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        run: |
+          v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$v" --profile minimal
+          rustup default "$v"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq stress-ng
+      - run: cargo build --locked -p quorum_adversarial -p quorum_node -p quorum_notary
+      - name: Run Test E
+        env:
+          STRESS_CPU: ${{ inputs.stress_cpu }}
+          STRESS_VM: ${{ inputs.stress_vm }}
+          PROPOSERS: ${{ inputs.proposers }}
+        run: bash ci/stress_test_e.sh "${{ inputs.runs }}" stress_out
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: stress-out
+          path: stress_out

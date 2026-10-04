@@ -1,0 +1,10 @@
+test audit_store::tests::crash_at_every_stage_leaves_old_or_new_never_partial ... FAILED
+test audit_store::tests::a_log_whose_hash_chain_does_not_verify_is_refused ... FAILED
+test audit_store::tests::every_truncated_prefix_is_refused_not_treated_as_empty ... FAILED
+test audit_store::tests::garbage_and_empty_files_are_refused ... FAILED
+test audit_store::tests::missing_file_is_an_empty_log ... ok
+test audit_store::tests::persist_failures_are_reported_not_swallowed ... FAILED
+test audit_store::tests::persist_then_load_round_trips ... ok
+test audit_store::tests::stale_temp_files_are_ignored_and_cleaned_up ... FAILED
+test audit_store::tests::successful_write_leaves_no_temp_files_and_is_owner_only ... FAILED
+test result: FAILED. 2 passed; 7 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.10s

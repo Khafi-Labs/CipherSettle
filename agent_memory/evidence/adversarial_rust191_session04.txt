@@ -1,0 +1,108 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+--- Test A: malicious minority node ---
+[PASS] A0: honest baseline derive: 5-of-5 honest nodes derive successfully before any attack
+[PASS] A1: 1-of-5 malicious (garbage partials): correctly ignored node 2's garbage partial and derived the SAME correct key from the 4 honest nodes
+[PASS] A2: below-threshold honest nodes correctly refuses: correctly returned an error rather than a wrong key: only collected 2 sealed share(s), need at least 3
+
+--- Test B: below-threshold collusion ---
+[PASS] B0: collected exactly T sealed shares: collected 2 (need exactly 2 for this test)
+[PASS] B1: T-of-N (below threshold) combine cannot produce a key that verifies: combining only 2 sealed shares correctly failed to produce a key that verifies against the group public key
+
+--- Test C: node-level access-control bypass (CRITICAL) ---
+[PASS] C: node-level bypass of quorum_service's access control: bypass correctly BLOCKED: holding the shared mTLS client cert is no longer sufficient by itself -- every node refused the request for lacking a valid service_auth_key MAC (Stage A fix for Finding 1.1): only collected 0 sealed share(s), need at least 3
+
+--- Test D: replay attack ---
+[PASS] D: replayed derive request is rejected by single-use nonce tracking: confirmed FIXED: the first request was served normally; the byte-identical replay over a fresh TLS connection was rejected because its nonce had already been recorded as used -- Stage A closes Finding 2.1.
+
+--- Test M: sealed-share NIZK gate ---
+[PASS] M1: NIZK gate excludes a valid-proof-for-the-wrong-key adversary BEFORE the combine, on the first round: used nodes [1, 2, 3]; adversary excluded=true; result verifies=true
+[PASS] M2: control -- with the gate OFF the same adversary poisons round 1 (proves M1 is due to the gate): used nodes [0, 1, 2]; adversary admitted=true; result rejected=true
+
+--- Test L: replay across a node restart (T1-2) ---
+[PASS] L1: the captured request is served normally by the original node process (sanity check): first response: Some(DerivePartial { from: 0, sealed_share: SealedShare(af3538a74576e899..), proof: EncryptionProof(90611c645b2e177c..) })
+[PASS] L2: a request captured before the restart is NOT served after the restart: replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+[PASS] L3: the refusal comes from the restart guard (not merely from the node lacking a DKG share): replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+[PASS] L4: after the guard period a fresh request is not refused by the guard: fresh response: Some(DeriveReject { from: 0, reason: "DKG has not finalized on this node yet" }) (a 'DKG has not finalized' refusal here is expected: nodes do not persist shares)
+
+--- Test E: concurrent audit-proposer race ---
+[PASS] E: concurrent audit proposers both succeed with no lost write (Stage B retry): confirmed FIXED: both concurrent proposers received Ok, and both events are actually present in the final log (["action_b", "action_a"]) with a valid, non-duplicated hash chain -- the losing proposer's retry-with-refetch absorbed the collision instead of silently dropping its event (Stage B closes Finding 1.2).
+
+--- Test I: majority tip read ---
+[PASS] I: audit-log tip read tolerates node_addrs[0] being offline (Stage F fix): confirmed FIXED: with node_addrs[0] killed outright, the propose still succeeded in 43.0019ms and landed at the correct seq 2, using fetch_majority_tip's read from nodes 1-4 -- the previous hardcoded dependency on node_addrs[0] specifically is gone (Stage F closes Finding 2.2).
+
+--- Test F: mTLS penetration test ---
+[PASS] F1: connection with NO client certificate is rejected: correctly rejected (either at handshake, or via a fatal alert on the first subsequent I/O -- TLS 1.3 can accept a client's Finished optimistically before the server's rejection alert arrives, so both are checked)
+[PASS] F2: connection with a non-pinned client certificate is rejected: correctly rejected (handshake or first-I/O fatal alert)
+[PASS] F3: an oversized unterminated line from a validly-pinned peer gets the connection closed, not buffered without bound (A13): node closed the connection after 8912896 bytes sent without a '\n' terminator, as expected
+[PASS] F3b: the node stays alive and keeps serving other connections after rejecting the oversized line: a fresh, well-behaved connection made after the attack got a real response
+
+--- Test G: HTTP penetration test ---
+[PASS] G1: request with no Authorization header: got HTTP 401 (expected 401)
+[PASS] G2: request with an unknown API key: got HTTP 401 (expected 401)
+[PASS] G3: SQL-injection-shaped path parameter is treated as inert data: got HTTP 404 (expected 404 -- not found, not a SQL error): {"error":"invoice not found"}
+[PASS] G3b: invoices table still exists after the injection attempt: confirmed table intact
+[PASS] G4: oversized ciphertext payload is rejected: got HTTP 400 (expected 400): {"error":"payload of 4000 bytes exceeds the 1024-byte limit"}
+[PASS] G5: derive-key rate limit is enforced after repeated calls: after registering + 3 rapid derive-key calls (limit 2/window), last call returned HTTP 409 (expected 409)
+
+--- Test J: sealed-share retry protocol (A12) ---
+[PASS] J1: the adversary lands in round 1's subset (sanity check that this test actually tests something): round 1 used nodes [0, 1, 2]
+[PASS] J2: round 1's sealed result correctly fails client-side verification (the adversary's garbage share poisoned it): correctly rejected: decrypted derived key failed verification against the group public key -- a node in this subset likely sealed a bad ciphertext; retry with a different T+1 subset
+[PASS] J3: the first retry selects a DIFFERENT node subset than round 1, not the same one again: round 1 used [0, 1, 2], first retry used [0, 1, 3]
+[PASS] J4: retrying automatically recovers within the guaranteed bound (at most 9 failed retries for this quorum shape), without any human manually intervening beyond following the documented protocol: recovered after 6 retry round(s) following the initial failure
+[PASS] J5: once every subset has been reported as tried, the service returns a clear terminal failure (409), not a fabricated success: got HTTP 409 (expected 409): {"error":"every reachable 3-node combination has already been tried and failed (10 tried) -- likely more than this quorum's fault-tolerance budget of bad nodes for this request"}
+
+--- Test K: TLS termination (A5) ---
+[PASS] K1: quorum_service refuses to start when configured off-loopback without TLS: process exited: true, port never became connectable: true
+[PASS] K2: plaintext loopback still works (backward compatible): connected: true
+[PASS] K3a: quorum_service with TLS configured completes a real TLS handshake: handshake result: OK
+[PASS] K3b: the TLS-wrapped connection actually carries a real HTTP response: first bytes: Some("HTTP/1.1 404 Not Found")
+[PASS] K3c: a plaintext (non-TLS) request against the TLS port does NOT get a plaintext HTTP response: got 7 bytes back, looked like plaintext HTTP: false
+
+--- Test N: crypto cutover guard ---
+[PASS] N0: an empty database is stamped with the current crypto epoch and the service starts: started: true, marker after start: Some("blstrs-rfc9380-v1")
+[PASS] N1: a database with invoices but no crypto-epoch marker is refused (pre-cutover data): seed ok: true, service started: false, marker written: None
+[PASS] N2: a mismatched epoch marker is refused even with the acknowledgement set: service started: false, marker left as: Some("threshold_crypto-legacy")
+[PASS] N3: control -- identical pre-cutover state starts and is stamped once explicitly acknowledged: service started: true, marker after start: Some("blstrs-rfc9380-v1")
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] A0: honest baseline derive -- 5-of-5 honest nodes derive successfully before any attack
+  [PASS] A1: 1-of-5 malicious (garbage partials) -- correctly ignored node 2's garbage partial and derived the SAME correct key from the 4 honest nodes
+  [PASS] A2: below-threshold honest nodes correctly refuses -- correctly returned an error rather than a wrong key: only collected 2 sealed share(s), need at least 3
+  [PASS] B0: collected exactly T sealed shares -- collected 2 (need exactly 2 for this test)
+  [PASS] B1: T-of-N (below threshold) combine cannot produce a key that verifies -- combining only 2 sealed shares correctly failed to produce a key that verifies against the group public key
+  [PASS] C: node-level bypass of quorum_service's access control -- bypass correctly BLOCKED: holding the shared mTLS client cert is no longer sufficient by itself -- every node refused the request for lacking a valid service_auth_key MAC (Stage A fix for Finding 1.1): only collected 0 sealed share(s), need at least 3
+  [PASS] D: replayed derive request is rejected by single-use nonce tracking -- confirmed FIXED: the first request was served normally; the byte-identical replay over a fresh TLS connection was rejected because its nonce had already been recorded as used -- Stage A closes Finding 2.1.
+  [PASS] M1: NIZK gate excludes a valid-proof-for-the-wrong-key adversary BEFORE the combine, on the first round -- used nodes [1, 2, 3]; adversary excluded=true; result verifies=true
+  [PASS] M2: control -- with the gate OFF the same adversary poisons round 1 (proves M1 is due to the gate) -- used nodes [0, 1, 2]; adversary admitted=true; result rejected=true
+  [PASS] L1: the captured request is served normally by the original node process (sanity check) -- first response: Some(DerivePartial { from: 0, sealed_share: SealedShare(af3538a74576e899..), proof: EncryptionProof(90611c645b2e177c..) })
+  [PASS] L2: a request captured before the restart is NOT served after the restart -- replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+  [PASS] L3: the refusal comes from the restart guard (not merely from the node lacking a DKG share) -- replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+  [PASS] L4: after the guard period a fresh request is not refused by the guard -- fresh response: Some(DeriveReject { from: 0, reason: "DKG has not finalized on this node yet" }) (a 'DKG has not finalized' refusal here is expected: nodes do not persist shares)
+  [PASS] E: concurrent audit proposers both succeed with no lost write (Stage B retry) -- confirmed FIXED: both concurrent proposers received Ok, and both events are actually present in the final log (["action_b", "action_a"]) with a valid, non-duplicated hash chain -- the losing proposer's retry-with-refetch absorbed the collision instead of silently dropping its event (Stage B closes Finding 1.2).
+  [PASS] I: audit-log tip read tolerates node_addrs[0] being offline (Stage F fix) -- confirmed FIXED: with node_addrs[0] killed outright, the propose still succeeded in 43.0019ms and landed at the correct seq 2, using fetch_majority_tip's read from nodes 1-4 -- the previous hardcoded dependency on node_addrs[0] specifically is gone (Stage F closes Finding 2.2).
+  [PASS] F1: connection with NO client certificate is rejected -- correctly rejected (either at handshake, or via a fatal alert on the first subsequent I/O -- TLS 1.3 can accept a client's Finished optimistically before the server's rejection alert arrives, so both are checked)
+  [PASS] F2: connection with a non-pinned client certificate is rejected -- correctly rejected (handshake or first-I/O fatal alert)
+  [PASS] F3: an oversized unterminated line from a validly-pinned peer gets the connection closed, not buffered without bound (A13) -- node closed the connection after 8912896 bytes sent without a '\n' terminator, as expected
+  [PASS] F3b: the node stays alive and keeps serving other connections after rejecting the oversized line -- a fresh, well-behaved connection made after the attack got a real response
+  [PASS] G1: request with no Authorization header -- got HTTP 401 (expected 401)
+  [PASS] G2: request with an unknown API key -- got HTTP 401 (expected 401)
+  [PASS] G3: SQL-injection-shaped path parameter is treated as inert data -- got HTTP 404 (expected 404 -- not found, not a SQL error): {"error":"invoice not found"}
+  [PASS] G3b: invoices table still exists after the injection attempt -- confirmed table intact
+  [PASS] G4: oversized ciphertext payload is rejected -- got HTTP 400 (expected 400): {"error":"payload of 4000 bytes exceeds the 1024-byte limit"}
+  [PASS] G5: derive-key rate limit is enforced after repeated calls -- after registering + 3 rapid derive-key calls (limit 2/window), last call returned HTTP 409 (expected 409)
+  [PASS] J1: the adversary lands in round 1's subset (sanity check that this test actually tests something) -- round 1 used nodes [0, 1, 2]
+  [PASS] J2: round 1's sealed result correctly fails client-side verification (the adversary's garbage share poisoned it) -- correctly rejected: decrypted derived key failed verification against the group public key -- a node in this subset likely sealed a bad ciphertext; retry with a different T+1 subset
+  [PASS] J3: the first retry selects a DIFFERENT node subset than round 1, not the same one again -- round 1 used [0, 1, 2], first retry used [0, 1, 3]
+  [PASS] J4: retrying automatically recovers within the guaranteed bound (at most 9 failed retries for this quorum shape), without any human manually intervening beyond following the documented protocol -- recovered after 6 retry round(s) following the initial failure
+  [PASS] J5: once every subset has been reported as tried, the service returns a clear terminal failure (409), not a fabricated success -- got HTTP 409 (expected 409): {"error":"every reachable 3-node combination has already been tried and failed (10 tried) -- likely more than this quorum's fault-tolerance budget of bad nodes for this request"}
+  [PASS] K1: quorum_service refuses to start when configured off-loopback without TLS -- process exited: true, port never became connectable: true
+  [PASS] K2: plaintext loopback still works (backward compatible) -- connected: true
+  [PASS] K3a: quorum_service with TLS configured completes a real TLS handshake -- handshake result: OK
+  [PASS] K3b: the TLS-wrapped connection actually carries a real HTTP response -- first bytes: Some("HTTP/1.1 404 Not Found")
+  [PASS] K3c: a plaintext (non-TLS) request against the TLS port does NOT get a plaintext HTTP response -- got 7 bytes back, looked like plaintext HTTP: false
+  [PASS] N0: an empty database is stamped with the current crypto epoch and the service starts -- started: true, marker after start: Some("blstrs-rfc9380-v1")
+  [PASS] N1: a database with invoices but no crypto-epoch marker is refused (pre-cutover data) -- seed ok: true, service started: false, marker written: None
+  [PASS] N2: a mismatched epoch marker is refused even with the acknowledgement set -- service started: false, marker left as: Some("threshold_crypto-legacy")
+  [PASS] N3: control -- identical pre-cutover state starts and is stamped once explicitly acknowledged -- service started: true, marker after start: Some("blstrs-rfc9380-v1")
+39/39 checks passed as expected.

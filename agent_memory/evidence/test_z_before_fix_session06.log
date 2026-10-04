@@ -1,0 +1,19 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+
+--- Test Z: service audit semantics (F-13/F-14) ---
+[FAIL] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change): split_votes=5/5 http=500 body={"error":"gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: only collected 0 co-signature(s), need at 
+[FAIL] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record: invoice_row_exists=true outbox_status=Err("db error")
+[FAIL] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence): drained=false entries_for_invoice=0 chain_ok=false after=25073ms
+[PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention): statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+[FAIL] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate): pending_left=9223372036854775807 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+[FAIL] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table): invoices_without_outbox_record=-1
+
+=== Phase 4 Adversarial Test Summary ===
+  [FAIL] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change) -- split_votes=5/5 http=500 body={"error":"gave up after 8 attempts to append this entry against a repeatedly-contended log tip; last attempt's error: only collected 0 co-signature(s), need at 
+  [FAIL] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record -- invoice_row_exists=true outbox_status=Err("db error")
+  [FAIL] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence) -- drained=false entries_for_invoice=0 chain_ok=false after=25073ms
+  [PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention) -- statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+  [FAIL] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate) -- pending_left=9223372036854775807 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+  [FAIL] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table) -- invoices_without_outbox_record=-1
+1/6 checks passed as expected.

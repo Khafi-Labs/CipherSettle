@@ -404,7 +404,7 @@ impl ProtocolState {
     pub fn audit_log(&self, invoice_id: Option<&str>) -> Vec<&AuditEvent> {
         self.audit_log
             .iter()
-            .filter(|e| invoice_id.map_or(true, |id| e.invoice_id == id))
+            .filter(|e| invoice_id.is_none_or(|id| e.invoice_id == id))
             .collect()
     }
 }
@@ -828,7 +828,8 @@ mod tests {
     fn registered_regulator_is_granted_access_and_flagged_as_disclosure() {
         let issuer = "issuer-1".to_string();
         let regulator = "regulator-1".to_string();
-        let role = resolve_access(&regulator, &issuer, &None, &[regulator.clone()]).unwrap();
+        let role =
+            resolve_access(&regulator, &issuer, &None, std::slice::from_ref(&regulator)).unwrap();
         assert_eq!(role, AccessRole::Regulator);
         assert_eq!(audit_action_for(&role), "disclosure_request");
     }
@@ -843,7 +844,7 @@ mod tests {
             &dual_role_principal,
             &dual_role_principal,
             &None,
-            &[dual_role_principal.clone()],
+            std::slice::from_ref(&dual_role_principal),
         )
         .unwrap();
         assert_eq!(role, AccessRole::Regulator);

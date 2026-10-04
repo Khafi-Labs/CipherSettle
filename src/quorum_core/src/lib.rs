@@ -164,6 +164,53 @@ pub fn verify_derive_auth(
     mac.verify_slice(mac_to_check).is_ok()
 }
 
+/// Gap 3 (step 1): the per-node derive-authorization key.
+///
+/// `quorum_service` holds a MASTER secret; node `i` is provisioned ONLY with
+/// `derive_node_auth_key(master, i)`. HKDF-SHA256 (RFC 5869) is one-way, so a
+/// node's key (leaked from that node's config, memory or backup) lets an
+/// attacker forge requests to THAT node only, which is fewer than the t+1
+/// partials needed to derive anything. (Before this change every node held the
+/// master itself: one stolen node key forged requests to all of them.)
+///
+/// The master must be at least this long (the service refuses to start with a
+/// shorter one).
+pub const MIN_AUTH_MASTER_BYTES: usize = 32;
+
+const NODE_AUTH_SALT: &[u8] = b"ciphersettle/derive-auth/v1";
+
+pub fn derive_node_auth_key(master: &[u8], node_id: usize) -> [u8; 32] {
+    let mut info = Vec::with_capacity(16 + 8);
+    info.extend_from_slice(b"node-auth-key");
+    info.extend_from_slice(&(node_id as u64).to_be_bytes());
+    hkdf_sha256_32(NODE_AUTH_SALT, master, &info)
+}
+
+/// HKDF-SHA256 (RFC 5869) producing exactly 32 bytes (a single expand block,
+/// `T(1) = HMAC(PRK, info || 0x01)`). Checked against RFC 5869 test case 1.
+pub fn hkdf_sha256_32(salt: &[u8], ikm: &[u8], info: &[u8]) -> [u8; 32] {
+    // Extract: PRK = HMAC(salt, IKM). HMAC accepts a key of any length, so
+    // these constructors cannot fail; the fallbacks keep this panic-free.
+    let prk = match HmacSha256::new_from_slice(salt) {
+        Ok(mut m) => {
+            m.update(ikm);
+            m.finalize().into_bytes()
+        }
+        Err(_) => return [0u8; 32],
+    };
+    match HmacSha256::new_from_slice(&prk) {
+        Ok(mut m) => {
+            m.update(info);
+            m.update(&[1u8]);
+            let t1 = m.finalize().into_bytes();
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&t1);
+            out
+        }
+        Err(_) => [0u8; 32],
+    }
+}
+
 /// Builds a freshly-signed, freshly-nonced `DeriveRequest`, valid for
 /// `validity_window_ms` from now (capped by the caller against
 /// [`MAX_DERIVE_AUTH_WINDOW_MS`] indirectly, since the node enforces that
@@ -564,6 +611,40 @@ mod tests {
         }
     }
 
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len() / 2)
+            .map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap())
+            .collect()
+    }
+
+    /// RFC 5869 Appendix A.1 (Test Case 1): the first 32 bytes of the OKM.
+    #[test]
+    fn hkdf_sha256_matches_rfc5869_test_case_1() {
+        let ikm = [0x0bu8; 22];
+        let salt = unhex("000102030405060708090a0b0c");
+        let info = unhex("f0f1f2f3f4f5f6f7f8f9");
+        let okm = hkdf_sha256_32(&salt, &ikm, &info);
+        assert_eq!(
+            okm.to_vec(),
+            unhex("3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf")
+        );
+    }
+
+    #[test]
+    fn node_auth_keys_are_distinct_deterministic_and_not_the_master() {
+        let master = [7u8; 32];
+        let k: Vec<[u8; 32]> = (0..5).map(|i| derive_node_auth_key(&master, i)).collect();
+        for i in 0..5 {
+            assert_eq!(k[i], derive_node_auth_key(&master, i), "deterministic");
+            assert_ne!(k[i].to_vec(), master.to_vec(), "must not equal the master");
+            for j in (i + 1)..5 {
+                assert_ne!(k[i], k[j], "nodes {i} and {j} must have different keys");
+            }
+        }
+        // A different master gives different keys.
+        assert_ne!(k[0], derive_node_auth_key(&[8u8; 32], 0));
+    }
+
     #[test]
     fn derive_auth_round_trips_and_rejects_tampering() {
         let key = b"a fake service_auth_key, 32B+";
@@ -722,6 +803,17 @@ pub enum Message {
     /// This is the actual replication step ("replicate the log across all
     /// quorum nodes, not just the operator's").
     ReplicateAuditEntry { entry: quorum_audit::AuditEntry },
+    /// Node -> proposer (F-19): "this exact entry is now DURABLE in my audit
+    /// log file (written, fsynced, renamed)". Sent only after persistence
+    /// succeeded, or if the identical entry was already durable here. A
+    /// proposer must not report an entry as committed until it holds at least
+    /// `t + 1` of these. Additive wire change: a node that does not know this
+    /// message simply never sends it (the proposer then reports NotDurable).
+    AuditEntryCommitted {
+        node_id: usize,
+        seq: u64,
+        entry_hash: [u8; 32],
+    },
     /// Anyone -> a node: "give me your log" (optionally filtered), for
     /// reads (mirrors `get_audit_log`'s metadata-only shape) and for
     /// reconciliation (an external reconciler fetches every node's full

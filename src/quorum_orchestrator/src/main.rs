@@ -183,7 +183,9 @@ async fn main() {
             ready_file: ready_file.to_string_lossy().to_string(),
             pubkey_file: pubkey_file.to_string_lossy().to_string(),
             audit_log_file: audit_log_file.to_string_lossy().to_string(),
-            service_auth_key_b64: b64(&service_auth_key),
+            service_auth_key_b64: b64(&quorum_core::derive_node_auth_key(&service_auth_key, id)),
+            persistence: None,
+            allow_ephemeral_share: true, // throwaway test quorum
         };
         let config_path = work_dir.join(format!("node{id}.json"));
         std::fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap())
@@ -328,13 +330,13 @@ async fn main() {
     let transport_pk = transport_sk.public_key();
 
     let mut sealed_shares: Vec<(usize, quorum_vetseal::SealedShare)> = Vec::new();
-    let req = quorum_core::build_derive_request(
-        &service_auth_key,
-        identity,
-        quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
-        transport_pk,
-    );
     for &id in &surviving_ids {
+        let req = quorum_core::build_derive_request(
+            &quorum_core::derive_node_auth_key(&service_auth_key, id),
+            identity,
+            quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
+            transport_pk,
+        );
         match quorum_client::send_request(&connector, &addrs[id], &req).await {
             Some(Message::DerivePartial {
                 sealed_share,

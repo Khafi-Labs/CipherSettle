@@ -58,7 +58,7 @@ Reading order for understanding the cryptography: `quorum_poc` → `quorum_core`
 
 ## How to use it
 
-Everything below assumes **rustc/cargo 1.75**, which `rust-toolchain.toml` pins declaratively (the Ubuntu-packaged version). Several `Cargo.toml`s in this workspace carry exact-version pins — currently `zeroize = "=1.5.7"` and `postgres-protocol` — inherited from the period when the `threshold_crypto` dependency chain forced an older compiler. The `threshold_crypto` migration is complete and that chain is gone, so these pins are no longer forced by anything; lifting them is tracked as a separate, testable change (finding A3 in `CipherSettle_Audit_Remediation_Roadmap.md`). On rustup 1.85+ they are safe to remove.
+Everything below assumes **rustc/cargo 1.97**, which `rust-toolchain.toml` pins declaratively (`channel = "1.97"`, tracking 1.97.x). The sandbox-era exact-version pins (`zeroize`, `postgres-protocol`, `base64ct`) were lifted in Gap 7; the remaining exact pins, if any, are checked by `ci/check_pin_policy.sh`, which requires an explanatory comment above each.
 
 Continuous integration runs on every push and pull request: `.github/workflows/ci.yml` builds, lints (`clippy -D warnings`), and tests the workspace against the pinned toolchain and a real Postgres 16 service container, and enforces that any exact-version pin carries an explanatory comment. `.github/workflows/security.yml` runs `cargo audit`, `cargo deny` against `deny.toml`, and emits a CycloneDX SBOM on release tags.
 

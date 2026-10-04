@@ -12,7 +12,7 @@ CipherSettle is a Rust Cargo workspace of 11 members implementing an off-chain, 
 / (workspace root)
 ├── Cargo.toml                  workspace member list (11 members)
 ├── Cargo.lock
-├── rust-toolchain.toml         pins rustc 1.75.0
+├── rust-toolchain.toml         pins rustc 1.97
 ├── deny.toml                   cargo-deny policy
 ├── ci/check_pin_policy.sh      fails build on undocumented `=` pins
 ├── README.md                   canonical current framing + scope correction

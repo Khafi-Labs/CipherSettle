@@ -1,0 +1,235 @@
+    Finished test [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src/lib.rs (target/debug/deps/ciphersettle_core-ecc3655932c5b92c)
+
+running 54 tests
+test commitment::tests::a_commitment_claiming_an_unsupported_version_is_rejected ... ok
+test commitment::tests::a_commitment_verifies_against_the_exact_fields_it_was_made_from ... ok
+test commitment::tests::a_guessed_salt_does_not_verify_against_the_real_commitment ... ok
+test commitment::tests::different_salts_for_identical_fields_produce_different_commitments ... ok
+test commitment::tests::serialization_round_trips ... ok
+test commitment::tests::tampering_with_any_single_field_is_detected ... ok
+test commitment::tests::unrelated_invoices_do_not_collide ... ok
+test merkle::tests::a_proof_claiming_an_unsupported_version_is_rejected ... ok
+test merkle::tests::a_proof_does_not_verify_against_a_later_root ... ok
+test merkle::tests::a_proof_with_mismatched_leaf_count_and_peaks_is_rejected ... ok
+test merkle::tests::a_single_leaf_log_roots_to_its_own_leaf_hash ... ok
+test merkle::tests::an_empty_log_has_no_root ... ok
+test merkle::tests::appending_more_leaves_changes_the_root ... ok
+test merkle::tests::every_leaf_proves_inclusion_at_every_size_up_to_sixteen ... ok
+test merkle::tests::tampering_with_a_peak_hash_is_detected ... ok
+test merkle::tests::tampering_with_a_sibling_hash_is_detected ... ok
+test merkle::tests::tampering_with_the_leaf_data_is_detected ... ok
+test merkle::tests::unrelated_logs_of_the_same_size_do_not_collide ... ok
+test state_tests::active_invoice_is_never_prune_eligible_regardless_of_age ... ok
+test state_tests::admin_can_revoke_a_registered_regulator ... ok
+test state_tests::double_settlement_is_rejected ... ok
+test state_tests::duplicate_invoice_id_is_rejected_even_with_new_nullifier ... ok
+test state_tests::duplicate_nullifier_blocks_second_invoice ... ok
+test state_tests::full_lifecycle_issuer_registers_grants_and_bank_derives ... ok
+test state_tests::issuer_can_regrant_after_revoking ... ok
+test state_tests::issuer_can_revoke_previously_granted_bank_access ... ok
+test state_tests::issuer_or_bank_can_mark_settled ... ok
+test state_tests::non_admin_cannot_register_regulator ... ok
+test state_tests::non_admin_cannot_revoke_regulator ... ok
+test state_tests::non_issuer_cannot_grant_settlement_access ... ok
+test state_tests::non_issuer_cannot_revoke_settlement_access ... ok
+test state_tests::regulator_access_is_logged_as_disclosure_in_full_flow ... ok
+test state_tests::revoking_an_unregistered_regulator_is_an_error ... ok
+test state_tests::revoking_settlement_access_with_nothing_granted_is_an_error_not_a_noop ... ok
+test state_tests::settled_invoice_is_prune_eligible_only_after_retention_window ... ok
+test state_tests::stranger_cannot_mark_settled ... ok
+test state_tests::unknown_invoice_is_not_prune_eligible ... ok
+test state_tests::unrelated_invoice_events_are_excluded_by_filter ... ok
+test tests::granted_bank_is_granted_access ... ok
+test tests::issuer_is_granted_access ... ok
+test tests::nullifier_allows_first_claim ... ok
+test tests::nullifier_rejects_second_claim ... ok
+test tests::payload_at_exact_limit_is_accepted ... ok
+test tests::payload_over_limit_is_rejected ... ok
+test tests::payload_within_limit_is_accepted ... ok
+test tests::rate_limit_allows_calls_under_the_cap ... ok
+test tests::rate_limit_blocks_calls_at_the_cap ... ok
+test tests::rate_limit_boundary_timestamp_counts_as_inside_the_window ... ok
+test tests::rate_limit_ignores_calls_outside_the_window ... ok
+test tests::registered_regulator_is_granted_access_and_flagged_as_disclosure ... ok
+test tests::regulator_who_is_also_issuer_is_still_logged_as_disclosure ... ok
+test tests::stranger_is_denied ... ok
+test tests::ungranted_bank_is_denied ... ok
+test tests::unregistered_caller_claiming_to_be_regulator_is_denied ... ok
+
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/merkle_commitment_integration.rs (target/debug/deps/merkle_commitment_integration-dbf9f73962fe0b73)
+
+running 4 tests
+test a_batch_of_invoice_commitments_is_individually_provable_under_one_root ... ok
+test a_proof_does_not_transfer_to_a_different_invoice_in_the_same_batch ... ok
+test batch_inclusion_does_not_substitute_for_the_commitment_s_own_field_check ... ok
+test tampering_with_a_batched_commitment_is_caught_by_its_merkle_proof ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/main.rs (target/debug/deps/quorum_adversarial-6e5ebfa808cfb327)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/quorum_audit-98ea56b1de48feab)
+
+running 16 tests
+test tests::a_fully_recomputed_alternate_chain_still_diverges_from_an_honest_copy ... ok
+test tests::a_node_that_is_simply_behind_reports_length_mismatch_not_hash_mismatch ... ok
+test tests::append_rejects_an_entry_that_does_not_extend_the_tip ... ok
+test tests::check_extends_does_not_mutate_and_admits_competing_proposals ... ok
+test tests::check_extends_rejects_what_try_append_rejects ... ok
+test tests::honest_chain_of_three_entries_verifies ... ok
+test tests::majority_reference_outvotes_a_tampered_minority_including_node_zero ... ok
+test tests::majority_reference_treats_a_behind_node_as_behind_not_a_vote_against_the_majority ... ok
+test tests::notarization_receipt_round_trips_and_rejects_forgery ... ok
+test tests::signatures_verify_against_the_correct_node_and_reject_a_forged_one ... ok
+test tests::tampering_with_an_entrys_content_breaks_verify_chain ... ok
+test vote_slot_tests::commit_clears_the_slot_for_the_next_seq ... ok
+test vote_slot_tests::exactly_one_proposer_wins_under_every_delivery_order ... ok
+test vote_slot_tests::same_hash_revote_is_idempotent_and_clock_going_backwards_does_not_panic ... ok
+test vote_slot_tests::split_round_recovers_after_ttl_and_never_double_commits ... ok
+test vote_slot_tests::ttl_expiry_can_split_quorums_documented_hazard ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/lib.rs (target/debug/deps/quorum_client-c7ccecd26f88aecd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/quorum_core-ddec7ba633f607f0)
+
+running 19 tests
+test tests::a_valid_proof_for_an_invented_scalar_is_rejected_against_the_group_key ... ok
+test tests::build_derive_request_produces_a_self_consistent_message ... ok
+test tests::combine_below_threshold_errors ... ok
+test tests::commitment_and_pubkeyset_serde_round_trip ... ok
+test tests::derive_auth_round_trips_and_rejects_tampering ... ok
+test tests::finalize_fails_cleanly_if_not_all_shares_received ... ok
+test tests::garbage_partial_fails_verification ... ok
+test tests::group_threshold_equals_t_after_dkg ... ok
+test tests::honest_dkg_finalizes_and_derives_consistently ... ok
+test tests::malformed_commitment_decoding_is_an_error ... ok
+test tests::non_canonical_share_bytes_are_a_complaint ... ok
+test tests::restart_guard_accepts_requests_issued_after_the_guard_period ... ok
+test tests::restart_guard_does_not_overflow_near_u64_max ... ok
+test tests::restart_guard_refusal_window_is_exactly_max_minus_default_validity ... ok
+test tests::restart_guard_refuses_every_request_a_prior_process_could_have_accepted ... ok
+test tests::sealed_partial_proof_verifies_only_for_the_right_node_identity_and_recipient ... ok
+test tests::signature_is_bound_to_identity ... ok
+test tests::tampered_share_is_reported_as_a_complaint_not_a_panic ... ok
+test tests::wrong_degree_dealer_is_rejected_with_a_complaint ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running unittests src/main.rs (target/debug/deps/quorum_node-84081d9427506feb)
+
+running 6 tests
+test bounded_line_reader::tests::clean_eof_with_no_partial_line_is_none ... ok
+test bounded_line_reader::tests::line_exactly_at_the_cap_is_still_accepted ... ok
+test bounded_line_reader::tests::multiple_lines_split_across_small_reads_still_parse_correctly ... ok
+test bounded_line_reader::tests::non_utf8_line_is_rejected_not_panicked ... ok
+test bounded_line_reader::tests::oversized_unterminated_line_is_rejected_with_bounded_memory ... ok
+test bounded_line_reader::tests::reads_normal_lines ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running unittests src/main.rs (target/debug/deps/quorum_notary-63d4a69a375b0d5c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/quorum_orchestrator-63bcb4f7f2700b38)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/quorum_poc-e5739dfe98dd4886)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/quorum_service-d2c564b645986c22)
+
+running 11 tests
+test api_key_auth_tests::correct_key_resolves_to_its_caller_id ... ok
+test api_key_auth_tests::empty_key_list_rejects_everything ... ok
+test api_key_auth_tests::near_miss_key_sharing_a_long_prefix_is_still_rejected ... ok
+test api_key_auth_tests::raw_key_is_never_recoverable_from_the_stored_entry ... ok
+test api_key_auth_tests::wrong_key_is_rejected ... ok
+test db::decision_matrix_tests::decision_matrix_is_exhaustive_and_never_overwrites_a_foreign_marker ... ok
+test db::epoch_tests::acknowledgement_stamps_an_unstamped_database_with_invoices ... ok
+test db::epoch_tests::empty_unstamped_database_is_stamped ... ok
+test db::epoch_tests::matching_marker_proceeds_regardless_of_data ... ok
+test db::epoch_tests::mismatched_marker_is_refused_even_when_acknowledged ... ok
+test db::epoch_tests::unstamped_database_with_invoices_is_refused_without_acknowledgement ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/db_pool_concurrency.rs (target/debug/deps/db_pool_concurrency-ce627e69a6cbd73e)
+
+running 2 tests
+test db_helpers_work_unchanged_against_a_pooled_client ... ok
+test pool_hands_out_multiple_simultaneous_connections ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+     Running unittests src/lib.rs (target/debug/deps/quorum_vetseal-c74c23dd2795dd8e)
+
+running 14 tests
+test nizk::tests::degenerate_proof_blobs_never_verify_and_never_panic ... ok
+test nizk::tests::every_byte_flip_in_the_proof_encoding_is_rejected ... ok
+test nizk::tests::every_byte_flip_in_the_sealed_share_is_rejected ... ok
+test nizk::tests::honest_proof_verifies_and_sealed_share_still_decrypts_correctly ... ok
+test nizk::tests::honest_proofs_verify_across_seeds_and_nodes ... ok
+test nizk::tests::mismatched_pk_share_fails_proof ... ok
+test nizk::tests::proof_cannot_be_replayed_across_identities_or_nodes ... ok
+test nizk::tests::public_key_share_and_proof_bytes_round_trip ... ok
+test nizk::tests::tampered_ciphertext_fails_proof ... ok
+test nizk::tests::wrong_identity_share_fails_proof_before_combine ... ok
+test tests::bad_node_ciphertext_is_caught_at_final_verify_not_silently_combined ... ok
+test tests::sealed_combine_is_subset_independent ... ok
+test tests::sealed_combine_matches_unsealed_combine ... ok
+test tests::wrong_transport_key_fails_group_verification ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+
+   Doc-tests ciphersettle_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quorum_audit
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quorum_client
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quorum_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quorum_vetseal
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -154,7 +154,7 @@ impl Commitment {
     /// Validating decode: length multiple of 48, 1..=MAX points, every
     /// point on-curve and in the prime-order subgroup.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
-        if bytes.is_empty() || bytes.len() % G1_COMPRESSED_SIZE != 0 {
+        if bytes.is_empty() || !bytes.len().is_multiple_of(G1_COMPRESSED_SIZE) {
             return Err(format!(
                 "commitment length {} is not a positive multiple of {G1_COMPRESSED_SIZE}",
                 bytes.len()
@@ -396,6 +396,34 @@ impl SecretKeyShare {
     pub fn sign(&self, msg: &[u8]) -> SignatureShare {
         SignatureShare(hash_to_g2(msg) * self.sk)
     }
+
+    /// Gap 1: exports the raw share (32 big-endian bytes, DKG wire encoding)
+    /// so the caller can ENCRYPT it for at-rest storage. The caller MUST wrap
+    /// it in a zeroizing container and never log or write it unencrypted.
+    /// NEEDS_HUMAN_CRYPTO_REVIEW.
+    pub fn export_for_sealed_storage(&self) -> [u8; FR_BYTES] {
+        scalar_to_bytes(&self.sk)
+    }
+
+    /// Gap 1: inverse of [`Self::export_for_sealed_storage`] with the same
+    /// check `DkgSession::finalize` performs: canonical scalar AND
+    /// `share * G1 == group_pks.public_key_share(my_id)`.
+    pub fn restore_verified(
+        bytes: &[u8; FR_BYTES],
+        my_id: usize,
+        group_pks: &PublicKeySet,
+    ) -> Result<Self, String> {
+        let sk = scalar_from_bytes(bytes)
+            .ok_or_else(|| "stored share is not a canonical field element".to_string())?;
+        let share = SecretKeyShare { sk };
+        if share.public_key_share() != group_pks.public_key_share(my_id) {
+            return Err(
+                "stored share does not match the group public commitment for this node id"
+                    .to_string(),
+            );
+        }
+        Ok(share)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -469,6 +497,16 @@ impl PublicKeySet {
 
     pub fn public_key_share(&self, id: usize) -> G1Projective {
         self.commitment.evaluate(point_of(id))
+    }
+
+    /// Gap 1: SHA-256 over a domain tag and the compressed commitment points;
+    /// a stable public identifier of the group key (AEAD AAD and operator pin).
+    pub fn fingerprint_sha256(&self) -> [u8; 32] {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(b"ciphersettle/group-pubkey-fingerprint/v1");
+        h.update(self.commitment.to_bytes());
+        h.finalize().into()
     }
 
     /// The threshold `t` (degree of the group polynomial); `t + 1` shares

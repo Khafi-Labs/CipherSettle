@@ -294,15 +294,15 @@ pub async fn derive_from_quorum(
 ) -> Result<Signature, String> {
     let transport_sk = quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng());
     let transport_pk = transport_sk.public_key();
-    let req = quorum_core::build_derive_request(
-        service_auth_key,
-        identity,
-        DERIVE_AUTH_VALIDITY_MS,
-        transport_pk,
-    );
-
     let mut sealed_shares: Vec<(usize, quorum_vetseal::SealedShare)> = Vec::new();
     for (id, addr) in node_addrs {
+        // Gap 3 step 1: each node verifies a MAC under ITS OWN derived key.
+        let req = quorum_core::build_derive_request(
+            &quorum_core::derive_node_auth_key(service_auth_key, *id),
+            identity,
+            DERIVE_AUTH_VALIDITY_MS,
+            transport_pk,
+        );
         match send_request(connector, addr, &req).await {
             Some(Message::DerivePartial {
                 sealed_share,
@@ -445,12 +445,6 @@ pub async fn collect_sealed_derived_key(
     tried_subsets: &[Vec<usize>],
 ) -> Result<CollectedSealedShares, CollectSealedError> {
     let want = threshold + 1;
-    let req = quorum_core::build_derive_request(
-        service_auth_key,
-        identity,
-        DERIVE_AUTH_VALIDITY_MS,
-        *transport_public_key,
-    );
 
     // Contact every configured node (not stopping at the first `want`
     // reachable ones) so there's real choice among combinations -- see
@@ -458,6 +452,12 @@ pub async fn collect_sealed_derived_key(
     let mut sealed_shares: std::collections::BTreeMap<usize, quorum_vetseal::SealedShare> =
         std::collections::BTreeMap::new();
     for (id, addr) in node_addrs {
+        let req = quorum_core::build_derive_request(
+            &quorum_core::derive_node_auth_key(service_auth_key, *id),
+            identity,
+            DERIVE_AUTH_VALIDITY_MS,
+            *transport_public_key,
+        );
         match send_request(connector, addr, &req).await {
             Some(Message::DerivePartial {
                 sealed_share,
@@ -758,17 +758,93 @@ pub async fn propose_and_cosign_and_replicate(
     threshold: usize,
     event: AuditEvent,
 ) -> Result<AuditEntry, String> {
+    propose_audit_entry(connector, node_addrs, threshold, event)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Why an audit proposal ended without a committed entry (F-13). A proposal
+/// NEVER ends silently: it either returns the committed entry or one of these,
+/// each carrying enough detail to be recorded and acted on by the caller.
+/// Retry budget and vote TTL are deliberately NOT widened to avoid this
+/// (widening the TTL window worsens SECURITY_REVIEW R-2); the caller owns
+/// durable retry (see the service's audit outbox).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProposeError {
+    /// Nodes were reachable and answered but refused our entry (a competing
+    /// proposal holds their vote slot) so no entry reached quorum.
+    Contention {
+        attempts: usize,
+        signed: usize,
+        needed: usize,
+        rejections: usize,
+    },
+    /// Too few nodes answered at all (outage / partition / no tip majority).
+    QuorumUnavailable { attempts: usize, detail: String },
+    /// The entry reached signing quorum but fewer than t+1 nodes confirmed it
+    /// durable. It may exist on some nodes; do NOT assume it was not recorded.
+    NotDurable {
+        seq: u64,
+        acks: usize,
+        needed: usize,
+    },
+    /// No nodes configured.
+    NotConfigured,
+}
+
+impl std::fmt::Display for ProposeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProposeError::Contention {
+                attempts,
+                signed,
+                needed,
+                rejections,
+            } => write!(
+                f,
+                "audit contention: gave up after {attempts} attempts; best attempt collected {signed} \
+                 co-signature(s), need {needed}; {rejections} node refusal(s) in the last attempt \
+                 (a competing proposal holds the vote slots; they free on commit or after the vote TTL)"
+            ),
+            ProposeError::QuorumUnavailable { attempts, detail } => write!(
+                f,
+                "audit quorum unavailable: gave up after {attempts} attempts; last error: {detail}"
+            ),
+            ProposeError::NotDurable { seq, acks, needed } => write!(
+                f,
+                "audit entry seq {seq} was co-signed but only {acks} node(s) confirmed it durable, need {needed}; it may exist on some nodes"
+            ),
+            ProposeError::NotConfigured => write!(f, "no quorum nodes configured"),
+        }
+    }
+}
+
+impl std::error::Error for ProposeError {}
+
+/// Typed form of [`propose_and_cosign_and_replicate`]; same protocol and the
+/// same retry budget (not widened), but the failure is classified.
+pub async fn propose_audit_entry(
+    connector: &TlsConnector,
+    node_addrs: &[(usize, String)],
+    threshold: usize,
+    event: AuditEvent,
+) -> Result<AuditEntry, ProposeError> {
     const MAX_PROPOSE_ATTEMPTS: usize = 8;
-    let mut last_err = "no attempts were made".to_string();
+    let mut last = AttemptError::NoAttempts;
     for attempt in 0..MAX_PROPOSE_ATTEMPTS {
         match try_propose_once(connector, node_addrs, threshold, event.clone()).await {
             Ok(entry) => return Ok(entry),
+            Err(AttemptError::NotConfigured) => return Err(ProposeError::NotConfigured),
+            // Never re-propose after a durability failure: some nodes may already
+            // hold the entry and a retry could duplicate it.
+            Err(AttemptError::NotDurable { seq, acks, needed }) => {
+                return Err(ProposeError::NotDurable { seq, acks, needed })
+            }
             Err(e) => {
-                last_err = e;
+                last = e;
                 // Jittered backoff derived from the clock rather than a new
                 // `rand` dependency in this crate -- good enough to
-                // de-synchronize two colliding retriers, which is all this
-                // needs (it is not a security-sensitive randomness use).
+                // de-synchronize two colliding retriers (not a security use).
                 let jitter_ms = (std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.subsec_nanos())
@@ -779,10 +855,46 @@ pub async fn propose_and_cosign_and_replicate(
             }
         }
     }
-    Err(format!(
-        "gave up after {MAX_PROPOSE_ATTEMPTS} attempts to append this entry against a repeatedly-contended \
-         log tip; last attempt's error: {last_err}"
-    ))
+    Err(match last {
+        AttemptError::QuorumNotReached {
+            signed,
+            needed,
+            rejections,
+        } if rejections > 0 => ProposeError::Contention {
+            attempts: MAX_PROPOSE_ATTEMPTS,
+            signed,
+            needed,
+            rejections,
+        },
+        AttemptError::QuorumNotReached { signed, needed, .. } => ProposeError::QuorumUnavailable {
+            attempts: MAX_PROPOSE_ATTEMPTS,
+            detail: format!("only {signed} co-signature(s), need {needed}, and no node refused (nodes unreachable)"),
+        },
+        AttemptError::TipUnavailable(detail) => ProposeError::QuorumUnavailable {
+            attempts: MAX_PROPOSE_ATTEMPTS,
+            detail,
+        },
+        AttemptError::NotDurable { seq, acks, needed } => ProposeError::NotDurable { seq, acks, needed },
+        AttemptError::NotConfigured | AttemptError::NoAttempts => ProposeError::NotConfigured,
+    })
+}
+
+/// Outcome of a single propose attempt (internal; classified by
+/// [`propose_audit_entry`]).
+enum AttemptError {
+    NoAttempts,
+    NotConfigured,
+    TipUnavailable(String),
+    QuorumNotReached {
+        signed: usize,
+        needed: usize,
+        rejections: usize,
+    },
+    NotDurable {
+        seq: u64,
+        acks: usize,
+        needed: usize,
+    },
 }
 
 /// One single-shot attempt at "propose, collect co-signatures, replicate."
@@ -798,14 +910,17 @@ async fn try_propose_once(
     node_addrs: &[(usize, String)],
     threshold: usize,
     event: AuditEvent,
-) -> Result<AuditEntry, String> {
+) -> Result<AuditEntry, AttemptError> {
     if node_addrs.is_empty() {
-        return Err("no quorum nodes configured".to_string());
+        return Err(AttemptError::NotConfigured);
     }
-    let current_log = fetch_majority_tip(connector, node_addrs).await?;
+    let current_log = fetch_majority_tip(connector, node_addrs)
+        .await
+        .map_err(AttemptError::TipUnavailable)?;
     let mut entry = current_log.propose_next(event);
 
     let mut signed_count = 0usize;
+    let mut rejections = 0usize;
     for (id, addr) in node_addrs {
         if signed_count > threshold {
             break;
@@ -819,6 +934,7 @@ async fn try_propose_once(
                 signed_count += 1;
             }
             Some(Message::AuditAppendRejected { node_id, reason }) => {
+                rejections += 1;
                 eprintln!("[quorum_client] node {node_id} rejected audit append: {reason}");
             }
             _ => {
@@ -827,17 +943,54 @@ async fn try_propose_once(
         }
     }
     if signed_count <= threshold {
-        return Err(format!(
-            "only collected {signed_count} co-signature(s), need at least {}",
-            threshold + 1
-        ));
+        return Err(AttemptError::QuorumNotReached {
+            signed: signed_count,
+            needed: threshold + 1,
+            rejections,
+        });
     }
 
-    for (_, addr) in node_addrs {
-        let req = Message::ReplicateAuditEntry {
-            entry: entry.clone(),
-        };
-        let _ = send_fire_and_forget(connector, addr, &req).await; // best-effort
+    // F-19: replicate and WAIT for durable acknowledgements. The entry is only
+    // reported as committed once at least `threshold + 1` nodes confirm it is
+    // on their disk. Replication is idempotent, so non-acknowledging nodes get
+    // a few more rounds before we give up. No re-proposal on failure (that
+    // could duplicate an entry some nodes already hold).
+    let needed = threshold + 1;
+    let mut acked: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+    for _round in 0..3 {
+        for (id, addr) in node_addrs {
+            if acked.contains(id) {
+                continue;
+            }
+            let req = Message::ReplicateAuditEntry {
+                entry: entry.clone(),
+            };
+            if let Some(Message::AuditEntryCommitted {
+                node_id,
+                seq,
+                entry_hash,
+            }) = send_request(connector, addr, &req).await
+            {
+                if node_id == *id && seq == entry.seq && entry_hash == entry.entry_hash {
+                    acked.insert(node_id);
+                }
+            }
+        }
+        if acked.len() >= node_addrs.len() {
+            break;
+        }
+        if acked.len() >= needed {
+            // Quorum-durable; stragglers are caught up by later reads/replication.
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    if acked.len() < needed {
+        return Err(AttemptError::NotDurable {
+            seq: entry.seq,
+            acks: acked.len(),
+            needed,
+        });
     }
 
     Ok(entry)

@@ -6,8 +6,8 @@
 # an explanatory `#` comment.
 #
 # This isn't stylistic. A3 exists because this workspace accumulated
-# hard `=` pins (to work around the rustc-1.75-vs-edition2024 toolchain
-# wall -- see A6) and, in three of the eleven crates that carry one,
+# hard `=` pins (to work around the old rustc-1.75-vs-edition2024 toolchain
+# wall; lifted in Gap 7) and, in three of the eleven crates that carry one,
 # nobody wrote down *why* next to the pin. An exact pin with no stated
 # reason is indistinguishable, six months later, from "someone forgot to
 # unpin this" versus "this is load-bearing, do not touch" -- which is

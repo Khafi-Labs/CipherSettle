@@ -18,6 +18,24 @@ pub struct PeerConfig {
     pub audit_pubkey_b64: String,
 }
 
+/// Gap 1: durable, encrypted-at-rest storage of this node's DKG share.
+/// See `agent_memory/DESIGN_NOTE_gap1_share_persistence.md`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SharePersistenceConfig {
+    /// Directory holding `share.v1.json` (the encrypted share), mode 0700.
+    pub dir: String,
+    /// Path to this node's 32-byte key-encryption key (raw bytes, mode 0600),
+    /// stored OUTSIDE `dir`, one distinct KEK per node. Pilot KEK source only.
+    pub kek_file: String,
+    /// Optional operator pin: hex SHA-256 fingerprint of the group public key.
+    #[serde(default)]
+    pub expected_group_pubkey_sha256_hex: Option<String>,
+    /// One-time ceremony switch: only when true AND no share file exists may
+    /// this node run DKG (and it persists the result first).
+    #[serde(default)]
+    pub init_ceremony: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub node_id: usize,
@@ -57,6 +75,15 @@ pub struct NodeConfig {
     /// (JSON). "Replicate the log across all quorum nodes, not just the
     /// operator's" means every node gets one of these, not just node 0.
     pub audit_log_file: String,
+    /// Gap 1: see [`SharePersistenceConfig`].
+    #[serde(default)]
+    pub persistence: Option<SharePersistenceConfig>,
+    /// Explicit opt-in to the legacy ephemeral share mode (no `persistence`).
+    /// Without it a config that omits `persistence` is a startup ERROR, so a
+    /// forgotten field can never silently mean "every restart destroys the
+    /// group key". Throwaway test quorums only.
+    #[serde(default)]
+    pub allow_ephemeral_share: bool,
 }
 
 pub fn b64_decode(s: &str) -> Vec<u8> {

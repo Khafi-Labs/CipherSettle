@@ -1,0 +1,12 @@
+fmt=0
+pin=0
+clippy=0
+build=0 warnings=0
+test=0
+passed 152 failed 0
+ok:   db_pool_concurrency.db_helpers_work_unchanged_against_a_pooled_client.outcome => ran
+ok:   db_pool_concurrency.pool_hands_out_multiple_simultaneous_connections.outcome => ran
+assert=0
+adv=0
+60/60 checks passed as expected.
+END

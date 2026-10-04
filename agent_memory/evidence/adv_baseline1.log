@@ -1,0 +1,527 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+--- Test A: malicious minority node ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9500
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9501
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9502
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9503
+[node 1 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9504
+[node 4 -> 1] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 0] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 0 -> 2] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 3 -> 2] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 4 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[PASS] A0: honest baseline derive: 5-of-5 honest nodes derive successfully before any attack
+[quorum_client] node 2 sent a sealed share whose proof FAILED verification; excluded
+[PASS] A1: 1-of-5 malicious (garbage partials): correctly ignored node 2's garbage partial and derived the SAME correct key from the 4 honest nodes
+[quorum_client] node 2 sent a sealed share whose proof FAILED verification; excluded
+[PASS] A2: below-threshold honest nodes correctly refuses: correctly returned an error rather than a wrong key: only collected 2 sealed share(s), need at least 3
+
+--- Test B: below-threshold collusion ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9510
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9511
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9513
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9512
+[node 1 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9514
+[node 3 -> 2] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 4 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 1 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 2] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[PASS] B0: collected exactly T sealed shares: collected 2 (need exactly 2 for this test)
+[PASS] B1: T-of-N (below threshold) combine cannot produce a key that verifies: combining only 2 sealed shares correctly failed to produce a key that verifies against the group public key
+
+--- Test C: node-level access-control bypass (CRITICAL) ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9521
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9520
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9523
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9522
+[node 1 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9524
+[node 2 -> 0] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 0] DKG finalized.
+[node 1] DKG finalized.
+[node 0 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 2] DKG finalized.
+[node 0 -> 3] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 0] REJECTED derive request for "inv-NEVER-REGISTERED-ANYWHERE-12345": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[quorum_client] node 0 rejected derive: invalid derive authorization
+[node 1] REJECTED derive request for "inv-NEVER-REGISTERED-ANYWHERE-12345": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[quorum_client] node 1 rejected derive: invalid derive authorization
+[node 2] REJECTED derive request for "inv-NEVER-REGISTERED-ANYWHERE-12345": invalid authorization MAC (not from quorum_service, or the request was tampered with)
+[quorum_client] node 2 rejected derive: invalid derive authorization
+[PASS] C: node-level bypass of quorum_service's access control: bypass correctly BLOCKED: holding the shared mTLS client cert is no longer sufficient by itself -- every node refused the request for lacking a valid service_auth_key MAC (Stage A fix for Finding 1.1): only collected 0 sealed share(s), need at least 3
+
+--- Test D: replay attack ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9531
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9530
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9532
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9533
+[node 1 -> 0] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9534
+[node 1 -> 3] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 3] DKG finalized.
+[node 0 -> 1] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1] DKG finalized.
+[node 2] DKG finalized.
+[node 3 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 0] REJECTED derive request for "inv-adversarial-d": nonce already used (replay)
+[PASS] D: replayed derive request is rejected by single-use nonce tracking: confirmed FIXED: the first request was served normally; the byte-identical replay over a fresh TLS connection was rejected because its nonce had already been recorded as used -- Stage A closes Finding 2.1.
+
+--- Test M: sealed-share NIZK gate ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9630
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9631
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9633
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9632
+[node 1 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9634
+[node 2 -> 3] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 0] DKG finalized.
+[node 0 -> 1] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 1] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 4] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[quorum_client] node 0 sent a sealed share whose proof FAILED verification; excluded
+[PASS] M1: NIZK gate excludes a valid-proof-for-the-wrong-key adversary BEFORE the combine, on the first round: used nodes [1, 2, 3]; adversary excluded=true; result verifies=true
+[PASS] M2: control -- with the gate OFF the same adversary poisons round 1 (proves M1 is due to the gate): used nodes [0, 1, 2]; adversary admitted=true; result rejected=true
+
+--- Test L: replay across a node restart (T1-2) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9620
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9621
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9622
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9623
+[node 2 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9624
+[node 3 -> 2] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 0] DKG finalized.
+[node 4 -> 1] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 1] DKG finalized.
+[node 2] DKG finalized.
+[PASS] L1: the captured request is served normally by the original node process (sanity check): first response: Some(DerivePartial { from: 0, sealed_share: SealedShare(88255198341011a9..), proof: EncryptionProof(8ecf956e07b162df..) })
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9620
+[node 0 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0] REJECTED derive request for "inv-adversarial-l": predates this process's start guard (restart-replay protection)
+[PASS] L2: a request captured before the restart is NOT served after the restart: replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+[PASS] L3: the refusal comes from the restart guard (not merely from the node lacking a DKG share): replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+[PASS] L4: after the guard period a fresh request is not refused by the guard: fresh response: Some(DeriveReject { from: 0, reason: "DKG has not finalized on this node yet" }) (a 'DKG has not finalized' refusal here is expected: nodes do not persist shares)
+
+--- Test E: concurrent audit-proposer race ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9540
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9541
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9542
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9543
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9544
+[node 2 -> 0] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 4 -> 0] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0] DKG finalized.
+[node 1 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 2] DKG finalized.
+[node 3] DKG finalized.
+[node 0 -> 4] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 0] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[node 1] co-signed (pending) audit entry seq 0.
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] co-signed (pending) audit entry seq 0.
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] co-signed (pending) audit entry seq 0.
+[node 4] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 0] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[PASS] E: concurrent audit proposers both succeed with no lost write (Stage B retry): confirmed FIXED: both concurrent proposers received Ok, and both events are actually present in the final log (["action_b", "action_a"]) with a valid, non-duplicated hash chain -- the losing proposer's retry-with-refetch absorbed the collision instead of silently dropping its event (Stage B closes Finding 1.2).
+
+--- Test I: majority tip read ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9600
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9602
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9601
+[node 2 -> 0] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9603
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9604
+[node 1 -> 0] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 0] DKG finalized.
+[node 3 -> 1] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 2] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 1] DKG finalized.
+[node 4] DKG finalized.
+[node 3] DKG finalized.
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] co-signed (pending) audit entry seq 2.
+[node 2] co-signed (pending) audit entry seq 2.
+[node 3] co-signed (pending) audit entry seq 2.
+[PASS] I: audit-log tip read tolerates node_addrs[0] being offline (Stage F fix): confirmed FIXED: with node_addrs[0] killed outright, the propose still succeeded in 42.210275ms and landed at the correct seq 2, using fetch_majority_tip's read from nodes 1-4 -- the previous hardcoded dependency on node_addrs[0] specifically is gone (Stage F closes Finding 2.2).
+
+--- Test F: mTLS penetration test ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9550
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9551
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9552
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9553
+[node 2 -> 1] sent commitment + share
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9554
+[node 2 -> 0] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 0] DKG finalized.
+[node 0 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 0 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 2] DKG finalized.
+[node 3] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 0 <- 127.0.0.1:55898] connection error: peer sent no certificates
+[PASS] F1: connection with NO client certificate is rejected: correctly rejected (either at handshake, or via a fatal alert on the first subsequent I/O -- TLS 1.3 can accept a client's Finished optimistically before the server's rejection alert arrives, so both are checked)
+[node 0 <- 127.0.0.1:55914] connection error: unexpected error: peer certificate is not in this node's pinned allow-list
+[PASS] F2: connection with a non-pinned client certificate is rejected: correctly rejected (handshake or first-I/O fatal alert)
+[PASS] F3: an oversized unterminated line from a validly-pinned peer gets the connection closed, not buffered without bound (A13): node closed the connection after 8912896 bytes sent without a '\n' terminator, as expected
+[node 0 <- 127.0.0.1:55930] connection error: wire line exceeded 8388608 bytes without a \n terminator -- closing connection (audit finding A13)
+[PASS] F3b: the node stays alive and keeps serving other connections after rejecting the oversized line: a fresh, well-behaved connection made after the attack got a real response
+
+--- Test G: HTTP penetration test ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9561
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9560
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9563
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9562
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9564
+[node 1 -> 0] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 0] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[node 2 -> 3] sent commitment + share
+[node 3] DKG finalized.
+[FAIL] G: HTTP pen-test suite: SKIPPED -- could not connect to Postgres (ciphersettle_adversarial); run setup from PHASE3_README.md first
+
+--- Test J: sealed-share retry protocol (A12) ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9581
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9580
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9583
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9582
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9584
+[node 0 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 4 -> 2] sent commitment + share
+[node 0] DKG finalized.
+[node 1 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 2] DKG finalized.
+[node 3] DKG finalized.
+[node 2 -> 4] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[FAIL] J: sealed-share retry protocol (A12): SKIPPED -- could not connect to Postgres (ciphersettle_adversarial); run setup from PHASE3_README.md first
+
+--- Test K: TLS termination (A5) ---
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9590
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9591
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9592
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9594
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9593
+[node 3 -> 1] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node [node 2 -> 3] sent commitment + share
+[node 2 -> 4] sent commitment + share
+1 -> 3] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 0] DKG finalized.
+[node 2 -> 1] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 4 -> 3] sent commitment + share
+[node 4] DKG finalized.
+[node 4 -> 2] sent commitment + share
+[node 3] DKG finalized.
+[node 3 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[FAIL] K: TLS termination (A5): SKIPPED -- could not connect to Postgres (ciphersettle_adversarial); run setup from PHASE3_README.md first
+
+--- Test N: crypto cutover guard ---
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9641
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9640
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9643
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9642
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9644
+[node 3 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 4 -> 3] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 0] DKG finalized.
+[node 1 -> 3] sent commitment + share
+[node 0 -> 2] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 1] DKG finalized.
+[node 3 -> 4] sent commitment + share
+[node 3] DKG finalized.
+[node 3 -> 2] sent commitment + share
+[node 2] DKG finalized.
+[node 1 -> 4] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 4] DKG finalized.
+[FAIL] N: cutover guard: SKIPPED -- could not connect to Postgres admin database
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] A0: honest baseline derive -- 5-of-5 honest nodes derive successfully before any attack
+  [PASS] A1: 1-of-5 malicious (garbage partials) -- correctly ignored node 2's garbage partial and derived the SAME correct key from the 4 honest nodes
+  [PASS] A2: below-threshold honest nodes correctly refuses -- correctly returned an error rather than a wrong key: only collected 2 sealed share(s), need at least 3
+  [PASS] B0: collected exactly T sealed shares -- collected 2 (need exactly 2 for this test)
+  [PASS] B1: T-of-N (below threshold) combine cannot produce a key that verifies -- combining only 2 sealed shares correctly failed to produce a key that verifies against the group public key
+  [PASS] C: node-level bypass of quorum_service's access control -- bypass correctly BLOCKED: holding the shared mTLS client cert is no longer sufficient by itself -- every node refused the request for lacking a valid service_auth_key MAC (Stage A fix for Finding 1.1): only collected 0 sealed share(s), need at least 3
+  [PASS] D: replayed derive request is rejected by single-use nonce tracking -- confirmed FIXED: the first request was served normally; the byte-identical replay over a fresh TLS connection was rejected because its nonce had already been recorded as used -- Stage A closes Finding 2.1.
+  [PASS] M1: NIZK gate excludes a valid-proof-for-the-wrong-key adversary BEFORE the combine, on the first round -- used nodes [1, 2, 3]; adversary excluded=true; result verifies=true
+  [PASS] M2: control -- with the gate OFF the same adversary poisons round 1 (proves M1 is due to the gate) -- used nodes [0, 1, 2]; adversary admitted=true; result rejected=true
+  [PASS] L1: the captured request is served normally by the original node process (sanity check) -- first response: Some(DerivePartial { from: 0, sealed_share: SealedShare(88255198341011a9..), proof: EncryptionProof(8ecf956e07b162df..) })
+  [PASS] L2: a request captured before the restart is NOT served after the restart -- replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+  [PASS] L3: the refusal comes from the restart guard (not merely from the node lacking a DKG share) -- replay response: Some(DeriveReject { from: 0, reason: "RESTART_GUARD: request could have been accepted by a previous process; retry with a fresh request" })
+  [PASS] L4: after the guard period a fresh request is not refused by the guard -- fresh response: Some(DeriveReject { from: 0, reason: "DKG has not finalized on this node yet" }) (a 'DKG has not finalized' refusal here is expected: nodes do not persist shares)
+  [PASS] E: concurrent audit proposers both succeed with no lost write (Stage B retry) -- confirmed FIXED: both concurrent proposers received Ok, and both events are actually present in the final log (["action_b", "action_a"]) with a valid, non-duplicated hash chain -- the losing proposer's retry-with-refetch absorbed the collision instead of silently dropping its event (Stage B closes Finding 1.2).
+  [PASS] I: audit-log tip read tolerates node_addrs[0] being offline (Stage F fix) -- confirmed FIXED: with node_addrs[0] killed outright, the propose still succeeded in 42.210275ms and landed at the correct seq 2, using fetch_majority_tip's read from nodes 1-4 -- the previous hardcoded dependency on node_addrs[0] specifically is gone (Stage F closes Finding 2.2).
+  [PASS] F1: connection with NO client certificate is rejected -- correctly rejected (either at handshake, or via a fatal alert on the first subsequent I/O -- TLS 1.3 can accept a client's Finished optimistically before the server's rejection alert arrives, so both are checked)
+  [PASS] F2: connection with a non-pinned client certificate is rejected -- correctly rejected (handshake or first-I/O fatal alert)
+  [PASS] F3: an oversized unterminated line from a validly-pinned peer gets the connection closed, not buffered without bound (A13) -- node closed the connection after 8912896 bytes sent without a '\n' terminator, as expected
+  [PASS] F3b: the node stays alive and keeps serving other connections after rejecting the oversized line -- a fresh, well-behaved connection made after the attack got a real response
+  [FAIL] G: HTTP pen-test suite -- SKIPPED -- could not connect to Postgres (ciphersettle_adversarial); run setup from PHASE3_README.md first
+  [FAIL] J: sealed-share retry protocol (A12) -- SKIPPED -- could not connect to Postgres (ciphersettle_adversarial); run setup from PHASE3_README.md first
+  [FAIL] K: TLS termination (A5) -- SKIPPED -- could not connect to Postgres (ciphersettle_adversarial); run setup from PHASE3_README.md first
+  [FAIL] N: cutover guard -- SKIPPED -- could not connect to Postgres admin database
+19/23 checks passed as expected.

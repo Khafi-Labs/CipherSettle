@@ -199,7 +199,9 @@ async fn spin_up_quorum(work_dir_name: &str, base_port: u16) -> LiveQuorum {
             ready_file: ready_file.to_string_lossy().to_string(),
             pubkey_file: pubkey_file.to_string_lossy().to_string(),
             audit_log_file: audit_log_file.to_string_lossy().to_string(),
-            service_auth_key_b64: b64(&service_auth_key),
+            service_auth_key_b64: b64(&quorum_core::derive_node_auth_key(&service_auth_key, id)),
+            persistence: None,
+            allow_ephemeral_share: true, // throwaway test quorum
         };
         let config_path = work_dir.join(format!("node{id}.json"));
         std::fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
@@ -475,13 +477,13 @@ async fn test_b_below_threshold_combine(report: &mut Report) {
     let transport_sk = quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng());
     let transport_pk = transport_sk.public_key();
     let mut sealed_shares: Vec<(usize, quorum_vetseal::SealedShare)> = Vec::new();
-    let req = quorum_core::build_derive_request(
-        &q.service_auth_key,
-        identity,
-        quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
-        transport_pk,
-    );
     for (id, addr) in addrs.iter().take(T) {
+        let req = quorum_core::build_derive_request(
+            &quorum_core::derive_node_auth_key(&q.service_auth_key, *id),
+            identity,
+            quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
+            transport_pk,
+        );
         if let Some(Message::DerivePartial { sealed_share, .. }) =
             quorum_client::send_request(&q.connector, addr, &req).await
         {
@@ -593,7 +595,7 @@ async fn test_d_replay(report: &mut Report) {
     let transport_pk =
         quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng()).public_key();
     let req = quorum_core::build_derive_request(
-        &q.service_auth_key,
+        &quorum_core::derive_node_auth_key(&q.service_auth_key, 0),
         identity,
         quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
         transport_pk,
@@ -656,7 +658,7 @@ async fn test_l_restart_replay(report: &mut Report) {
     let transport_pk =
         quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng()).public_key();
     let req = quorum_core::build_derive_request(
-        &q.service_auth_key,
+        &quorum_core::derive_node_auth_key(&q.service_auth_key, 0),
         identity,
         quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
         transport_pk,
@@ -722,7 +724,7 @@ async fn test_l_restart_replay(report: &mut Report) {
     let transport_pk2 =
         quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng()).public_key();
     let fresh_req = quorum_core::build_derive_request(
-        &q.service_auth_key,
+        &quorum_core::derive_node_auth_key(&q.service_auth_key, 0),
         "inv-adversarial-l-fresh",
         quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
         transport_pk2,
@@ -824,6 +826,802 @@ async fn test_e_concurrent_audit_race(report: &mut Report) {
         },
     );
 
+    kill_all(&mut q.children);
+}
+
+// =========================================================================
+// TEST X (opt-in, NOT part of the default run or CI): N concurrent proposers.
+// =========================================================================
+//
+// Test E fixes the proposer count at 2. With n=5 nodes and a quorum of 3, two
+// proposers can never deadlock (the vote split is 3/2, 4/1 or 5/0, so one
+// always reaches quorum). With THREE OR MORE proposers a 2/2/1 split leaves
+// nobody at quorum while every node holds its vote for up to
+// `PENDING_AUDIT_VOTE_TTL` (5 s), and the client's retry budget
+// (`MAX_PROPOSE_ATTEMPTS` = 8, ~0.5-0.8 s of total backoff) may be exhausted
+// first. This group measures that: it asserts the SAME properties as Test E
+// (every proposer Ok, every event present, valid chain, no duplicate seqs)
+// for N proposers, and prints each proposer's outcome so a failure is
+// diagnosable. It is a probe for a suspected liveness gap (see
+// agent_memory/SECURITY_FINDINGS.md), so it is excluded from the default run:
+// it runs only with `--only X` and takes the count from `--proposers N`.
+async fn test_x_n_concurrent_proposers(report: &mut Report, proposers: usize) {
+    let mut q = spin_up_quorum("adversarial_test_x", 9700).await;
+    let addrs = node_addr_list(&q, &[0, 1, 2, 3, 4]);
+
+    let started = Instant::now();
+    let mut handles = Vec::new();
+    for i in 0..proposers {
+        let connector = q.connector.clone();
+        let addrs = addrs.clone();
+        let event = AuditEvent {
+            invoice_id: "inv-race-x".into(),
+            actor: format!("proposer-{i}"),
+            action: format!("action_{i}"),
+            timestamp_unix_ms: 1 + i as u64,
+        };
+        handles.push(tokio::spawn(async move {
+            let t0 = Instant::now();
+            let r =
+                quorum_client::propose_and_cosign_and_replicate(&connector, &addrs, T, event).await;
+            (r, t0.elapsed())
+        }));
+    }
+    let mut outcomes: Vec<String> = Vec::new();
+    let mut ok_count = 0usize;
+    for (i, h) in handles.into_iter().enumerate() {
+        match h.await {
+            Ok((Ok(entry), d)) => {
+                ok_count += 1;
+                outcomes.push(format!("p{i}: OK seq={} in {}ms", entry.seq, d.as_millis()));
+            }
+            Ok((Err(e), d)) => {
+                let short: String = e.chars().take(110).collect();
+                outcomes.push(format!("p{i}: ERR in {}ms: {short}", d.as_millis()));
+            }
+            Err(e) => outcomes.push(format!("p{i}: task join error: {e}")),
+        }
+    }
+    let total_ms = started.elapsed().as_millis();
+
+    let log0 = quorum_client::fetch_full_log(&q.connector, &addrs[0].1).await;
+    let (all_present, chain_ok, no_dup_seqs, n_entries) = match &log0 {
+        Ok(log) => {
+            let actions: Vec<&str> = log
+                .entries
+                .iter()
+                .map(|e| e.event.action.as_str())
+                .collect();
+            let all_present =
+                (0..proposers).all(|i| actions.contains(&format!("action_{i}").as_str()));
+            let mut seqs: Vec<u64> = log.entries.iter().map(|e| e.seq).collect();
+            let before = seqs.len();
+            seqs.dedup();
+            (
+                all_present,
+                log.verify_chain().is_ok(),
+                seqs.len() == before,
+                log.entries.len(),
+            )
+        }
+        Err(_) => (false, false, false, 0),
+    };
+
+    let passed = ok_count == proposers && all_present && chain_ok && no_dup_seqs;
+    report.record(
+        &format!("X: {proposers} concurrent audit proposers all succeed with no lost write"),
+        passed,
+        format!(
+            "proposers={proposers} ok={ok_count} entries_in_log={n_entries} all_present={all_present} \
+             chain_ok={chain_ok} no_dup_seqs={no_dup_seqs} total={total_ms}ms | {}",
+            outcomes.join(" ; ")
+        ),
+    );
+
+    kill_all(&mut q.children);
+}
+
+// =========================================================================
+// TEST Y (opt-in, F-13): deterministic forced vote split.
+// =========================================================================
+//
+// No timing luck: votes are cast by hand so the 2/2/1 split ALWAYS exists.
+//   entry A -> nodes {0,1}, entry B -> nodes {2,3}, entry C -> node {4}
+// No entry can reach quorum (3 of 5), and each node refuses any other entry at
+// seq 0 until its pending vote commits or `PENDING_AUDIT_VOTE_TTL` (5 s)
+// expires. A fresh proposer must therefore be unable to commit.
+//
+// This pins CURRENT behaviour (F-13): the operation ends with an explicit
+// `Err`, nothing is committed anywhere, and only TTL expiry unblocks it. It
+// does not assert a fix. When F-13 is fixed (design pending), the hazard
+// check Y1 must change together with that design, not be deleted.
+async fn test_y_forced_vote_split(report: &mut Report) {
+    let mut q = spin_up_quorum("adversarial_test_y", 9750).await;
+    let addrs = node_addr_list(&q, &[0, 1, 2, 3, 4]);
+
+    let empty = quorum_audit::AuditLog::default();
+    let mk = |tag: &str| {
+        empty.propose_next(AuditEvent {
+            invoice_id: "inv-split".into(),
+            actor: format!("proposer-{tag}"),
+            action: format!("action_{tag}"),
+            timestamp_unix_ms: 1,
+        })
+    };
+    let plan: [(&str, &[usize]); 3] = [("A", &[0, 1]), ("B", &[2, 3]), ("C", &[4])];
+    let mut votes_granted = 0usize;
+    for (tag, nodes) in plan {
+        let entry = mk(tag);
+        for &n in nodes {
+            let r = quorum_client::send_request(
+                &q.connector,
+                &addrs[n].1,
+                &Message::AppendAuditEntry {
+                    entry: entry.clone(),
+                },
+            )
+            .await;
+            if matches!(r, Some(Message::AuditEntrySigned { .. })) {
+                votes_granted += 1;
+            }
+        }
+    }
+    let premise = votes_granted == 5;
+
+    let t0 = Instant::now();
+    let d_event = AuditEvent {
+        invoice_id: "inv-split".into(),
+        actor: "proposer-D".into(),
+        action: "action_D".into(),
+        timestamp_unix_ms: 2,
+    };
+    let r =
+        quorum_client::propose_and_cosign_and_replicate(&q.connector, &addrs, T, d_event.clone())
+            .await;
+    let elapsed_ms = t0.elapsed().as_millis();
+    let mut entries_anywhere = 0usize;
+    for (_, a) in &addrs {
+        if let Ok(log) = quorum_client::fetch_full_log(&q.connector, a).await {
+            entries_anywhere += log.entries.len();
+        }
+    }
+    let explicit_err = r.is_err();
+    report.record(
+        "Y1: forced 2/2/1 vote split -> proposer fails explicitly, nothing commits (F-13 hazard pinned)",
+        premise && explicit_err && entries_anywhere == 0,
+        format!(
+            "votes_granted={votes_granted}/5 propose_err={explicit_err} entries_in_all_logs={entries_anywhere} \
+             elapsed={elapsed_ms}ms err={}",
+            r.err().unwrap_or_default().chars().take(120).collect::<String>()
+        ),
+    );
+
+    // F-13: the same condition must be reported as a TYPED contention error
+    // (not a bare string), distinguishable from an outage.
+    let typed = quorum_client::propose_audit_entry(
+        &q.connector,
+        &addrs,
+        T,
+        AuditEvent {
+            invoice_id: "inv-split".into(),
+            actor: "proposer-E".into(),
+            action: "action_E".into(),
+            timestamp_unix_ms: 3,
+        },
+    )
+    .await;
+    report.record(
+        "Y3: the stalled proposal is reported as a typed ProposeError::Contention (not an outage, not a bare string)",
+        matches!(typed, Err(quorum_client::ProposeError::Contention { rejections, .. }) if rejections > 0),
+        format!("{typed:?}"),
+    );
+
+    // Observation: how long until the stuck slots free themselves.
+    tokio::time::sleep(Duration::from_millis(5_500)).await;
+    let r2 =
+        quorum_client::propose_and_cosign_and_replicate(&q.connector, &addrs, T, d_event).await;
+    report.record(
+        "Y2: after the 5 s vote TTL the same proposal succeeds (only TTL expiry unblocks the split)",
+        r2.is_ok(),
+        format!("ok={} err={:?}", r2.is_ok(), r2.as_ref().err()),
+    );
+    kill_all(&mut q.children);
+}
+
+// =========================================================================
+// TEST Z (F-13 + F-14): service-level audit failure semantics.
+// =========================================================================
+//
+// Owner invariants (session 06):
+//  * F-14: a state change must never exist without EITHER a committed audit
+//    entry OR a durable, observable pending-audit record created atomically
+//    with it (transactional outbox). A failed audit append must not leave a
+//    silent hole.
+//  * F-13: when the audit quorum cannot make progress, the operation fails
+//    EXPLICITLY (not a bare 500 after a committed change) and the work is not
+//    lost; concurrent callers must not starve each other.
+//
+// Z2 forces the failure deterministically (hand-cast 2/2/1 vote split at seq 0,
+// see Test Y), then registers an invoice through the real HTTP service.
+// Z1 then fires K concurrent registrations and requires all to commit.
+const Z_DB: &str =
+    "host=127.0.0.1 user=postgres password=ciphersettle_dev dbname=ciphersettle_adversarial";
+
+async fn z_scalar_string(
+    db: &tokio_postgres::Client,
+    sql: &str,
+    p: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+) -> Result<Option<String>, String> {
+    db.query_opt(sql, p)
+        .await
+        .map(|r| r.map(|row| row.get::<_, String>(0)))
+        .map_err(|e| e.to_string())
+}
+
+async fn test_z_service_audit_semantics(report: &mut Report) {
+    let mut q = spin_up_quorum("adversarial_test_z", 9800).await;
+    let (db, conn) = match tokio_postgres::connect(Z_DB, tokio_postgres::NoTls).await {
+        Ok(x) => x,
+        Err(_) => {
+            report.record(
+                "Z: service audit semantics",
+                false,
+                "SKIPPED -- could not connect to Postgres (ciphersettle_adversarial)",
+            );
+            kill_all(&mut q.children);
+            return;
+        }
+    };
+    tokio::spawn(async move {
+        let _ = conn.await;
+    });
+
+    let service_binary = locate_sibling_binary("quorum_service");
+    let service_addr = "127.0.0.1:9809".to_string();
+    let key = "z-issuer-key";
+    let config = serde_json::json!({
+        "listen_addr": service_addr, "db_url": Z_DB, "admin_caller_id": "z-admin",
+        "api_keys": [{"key": key, "caller_id": "z-issuer"}],
+        "client_cert_der_b64": b64(&q.client_identity.cert_der),
+        "client_key_der_b64": b64(&q.client_identity.key_der),
+        "service_auth_key_b64": b64(&q.service_auth_key),
+        "quorum_nodes": (0..N).map(|i| serde_json::json!({
+            "id": i, "addr": q.addrs[i], "cert_der_b64": b64(&q.node_identities[i].cert_der),
+        })).collect::<Vec<_>>(),
+        "notary_addr": null, "notary_cert_der_b64": null,
+        "group_pubkey_file": q.pubkey_files[1].to_string_lossy(),
+        "quorum_threshold": T, "max_ciphertext_bytes": 1024,
+        "ciphertext_retention_ms": 999_999_999u64,
+        "derive_rate_limit_max_calls": 10, "derive_rate_limit_window_ms": 60_000u64,
+        "acknowledge_pre_cutover_data": true,
+    });
+    let config_path = q.work_dir.join("service.json");
+    std::fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
+    let mut service_child = Command::new(&service_binary)
+        .arg(&config_path)
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while TcpStream::connect(&service_addr).await.is_err() {
+        if Instant::now() > deadline {
+            report.record(
+                "Z: service audit semantics",
+                false,
+                "quorum_service never started listening",
+            );
+            let _ = service_child.kill();
+            let _ = service_child.wait();
+            kill_all(&mut q.children);
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    let run_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let addrs = node_addr_list(&q, &[0, 1, 2, 3, 4]);
+    let post_invoice = |id: String| {
+        let sa = service_addr.clone();
+        async move {
+            http_json(
+                &sa,
+                "POST",
+                "/invoices",
+                Some(key),
+                Some(
+                    &serde_json::json!({"invoice_id": id, "nullifier_hash": format!("z-null-{id}"),
+                    "ciphertext_b64": b64(b"x"), "commitment_b64": sample_commitment_b64(&id)})
+                    .to_string(),
+                ),
+            )
+            .await
+        }
+    };
+
+    // ---- Z2: forced audit failure --------------------------------------
+    let empty = quorum_audit::AuditLog::default();
+    let mut granted = 0usize;
+    for (tag, nodes) in [("A", vec![0usize, 1]), ("B", vec![2, 3]), ("C", vec![4])] {
+        let entry = empty.propose_next(AuditEvent {
+            invoice_id: "z-split".into(),
+            actor: format!("z-{tag}"),
+            action: format!("z_action_{tag}"),
+            timestamp_unix_ms: 1,
+        });
+        for n in nodes {
+            let r = quorum_client::send_request(
+                &q.connector,
+                &addrs[n].1,
+                &Message::AppendAuditEntry {
+                    entry: entry.clone(),
+                },
+            )
+            .await;
+            if matches!(r, Some(Message::AuditEntrySigned { .. })) {
+                granted += 1;
+            }
+        }
+    }
+    let inv2 = format!("z2-{run_id}");
+    let (st2, body2) = post_invoice(inv2.clone()).await;
+    let row_exists = db
+        .query_opt("SELECT 1 FROM invoices WHERE invoice_id = $1", &[&inv2])
+        .await
+        .map(|r| r.is_some())
+        .unwrap_or(false);
+    let outbox_status = z_scalar_string(
+        &db,
+        "SELECT status FROM audit_outbox WHERE invoice_id = $1 AND action = 'invoice_registered'",
+        &[&inv2],
+    )
+    .await;
+    report.record(
+        "Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change)",
+        granted == 5 && st2 == 202 && body2.contains("pending"),
+        format!("split_votes={granted}/5 http={st2} body={}", body2.chars().take(160).collect::<String>()),
+    );
+    report.record(
+        "Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record",
+        !row_exists || matches!(&outbox_status, Ok(Some(_))),
+        format!("invoice_row_exists={row_exists} outbox_status={outbox_status:?}"),
+    );
+    // The outbox must drain on its own once the vote slots free (5 s TTL).
+    let mut drained = false;
+    let mut entries_for_inv = 0usize;
+    let mut chain_ok = false;
+    let t0 = Instant::now();
+    while t0.elapsed() < Duration::from_secs(25) {
+        let st = z_scalar_string(&db,
+            "SELECT status FROM audit_outbox WHERE invoice_id = $1 AND action = 'invoice_registered'", &[&inv2]).await;
+        if matches!(&st, Ok(Some(s)) if s == "done") {
+            if let Ok(log) = quorum_client::fetch_full_log(&q.connector, &addrs[1].1).await {
+                entries_for_inv = log
+                    .entries
+                    .iter()
+                    .filter(|e| e.event.invoice_id == inv2)
+                    .count();
+                chain_ok = log.verify_chain().is_ok();
+                drained = entries_for_inv >= 1;
+                if drained {
+                    break;
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    report.record(
+        "Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence)",
+        drained && entries_for_inv == 1 && chain_ok,
+        format!("drained={drained} entries_for_invoice={entries_for_inv} chain_ok={chain_ok} after={}ms", t0.elapsed().as_millis()),
+    );
+
+    // ---- Z1: K concurrent registrations through the live service -------
+    const K: usize = 8;
+    let mut hs = Vec::new();
+    for i in 0..K {
+        let id = format!("z1-{run_id}-{i}");
+        hs.push(tokio::spawn({
+            let f = post_invoice(id.clone());
+            async move { (id, f.await) }
+        }));
+    }
+    let mut ids = Vec::new();
+    let mut statuses = Vec::new();
+    for h in hs {
+        if let Ok((id, (st, _))) = h.await {
+            ids.push(id);
+            statuses.push(st);
+        }
+    }
+    let all_201 = statuses.len() == K && statuses.iter().all(|s| *s == 201);
+    // Wait for any outbox rows to drain, then require every invoice audited once.
+    let t1 = Instant::now();
+    let mut per_invoice: Vec<usize> = vec![0; ids.len()];
+    let mut pending_left = i64::MAX;
+    while t1.elapsed() < Duration::from_secs(25) {
+        pending_left = db
+            .query_one(
+                "SELECT count(*) FROM audit_outbox WHERE invoice_id LIKE $1 AND status <> 'done'",
+                &[&format!("z1-{run_id}-%")],
+            )
+            .await
+            .map(|r| r.get(0))
+            .unwrap_or(i64::MAX);
+        if let Ok(log) = quorum_client::fetch_full_log(&q.connector, &addrs[1].1).await {
+            for (i, id) in ids.iter().enumerate() {
+                per_invoice[i] = log
+                    .entries
+                    .iter()
+                    .filter(|e| e.event.invoice_id == *id && e.event.action == "invoice_registered")
+                    .count();
+            }
+        }
+        if pending_left == 0 && per_invoice.iter().all(|c| *c == 1) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    report.record(
+        "Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention)",
+        all_201,
+        format!("statuses={statuses:?}"),
+    );
+    report.record(
+        "Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate)",
+        pending_left == 0 && per_invoice.iter().all(|c| *c == 1),
+        format!("pending_left={pending_left} per_invoice_counts={per_invoice:?}"),
+    );
+    let orphans: i64 = db.query_one(
+        "SELECT count(*) FROM invoices i WHERE i.invoice_id LIKE $1 AND NOT EXISTS (SELECT 1 FROM audit_outbox o WHERE o.invoice_id = i.invoice_id AND o.action = 'invoice_registered')",
+        &[&format!("z%-{run_id}%")]).await.map(|r| r.get(0)).unwrap_or(-1);
+    report.record(
+        "Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table)",
+        orphans == 0,
+        format!("invoices_without_outbox_record={orphans}"),
+    );
+
+    let _ = service_child.kill();
+    let _ = service_child.wait();
+    kill_all(&mut q.children);
+}
+
+// =========================================================================
+// TEST Q (Gap 13 / F-01): audit-log durability across kill -9 and corruption.
+// =========================================================================
+//
+// Closed-when for Gap 13: killing the process at random points during writes
+// never leaves a corrupt or truncated log; a damaged log is never silently
+// replaced by an empty one.
+//  Q1  all 5 nodes hold 6 committed entries, SIGKILL all: every node's file
+//      parses, its hash chain verifies, and it still holds the 6 entries.
+//  Q2  after restarting from those files a new append lands as entry 7.
+//  Q3  3 rounds of SIGKILL in the middle of a burst of appends: after every
+//      kill every node's file parses and verifies (any length), and the
+//      cluster restarts.
+//  Q4-Q6  a corrupt / truncated / tampered log file => the node REFUSES to
+//      start (non-zero exit, no ready file) instead of starting empty.
+// NOTE (not asserted, see SECURITY_FINDINGS F-19): propose returns Ok after a
+// fire-and-forget replicate, so an acknowledged entry is not guaranteed to be
+// durable on any node at the instant of a kill. Q1 therefore polls until all
+// nodes hold the entries before killing.
+fn q_read_log(nodes: &PNodes, id: usize) -> Result<quorum_audit::AuditLog, String> {
+    let raw = std::fs::read(nodes.path("audit_log.json", id)).map_err(|e| format!("read: {e}"))?;
+    let log: quorum_audit::AuditLog =
+        serde_json::from_slice(&raw).map_err(|e| format!("parse: {e}"))?;
+    log.verify_chain()?;
+    Ok(log)
+}
+
+async fn test_q_audit_log_durability(report: &mut Report) {
+    let work = PathBuf::from("/tmp/adversarial_test_q");
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let base_port = 9940u16;
+    let nodes = PNodes {
+        work: work.clone(),
+        ids: (0..N).map(|_| generate_identity()).collect(),
+        audit: (0..N).map(|_| generate_audit_keypair()).collect(),
+        client: generate_identity(),
+        addrs: (0..N)
+            .map(|i| format!("127.0.0.1:{}", base_port + i as u16))
+            .collect(),
+        auth_key: generate_service_auth_key(),
+    };
+    for id in 0..N {
+        nodes.write_kek(id);
+    }
+    let ready: Vec<PathBuf> = (0..N).map(|i| nodes.path("ready", i)).collect();
+    let connector = quorum_client::build_connector(
+        nodes.client.cert_der.clone(),
+        nodes.client.key_der.clone(),
+        nodes.ids.iter().map(|n| n.cert_der.clone()).collect(),
+    );
+    let addrs: Vec<(usize, String)> = nodes.addrs.iter().cloned().enumerate().collect();
+    let ev = |tag: &str, i: usize| AuditEvent {
+        invoice_id: format!("q-{tag}-{i}"),
+        actor: "q".into(),
+        action: format!("q_action_{tag}_{i}"),
+        timestamp_unix_ms: 1 + i as u64,
+    };
+
+    let mut children: Vec<Child> = (0..N).map(|i| nodes.spawn(i, true)).collect();
+    wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
+
+    // ---- Q1: committed entries survive SIGKILL of every node ----
+    let mut appended = 0usize;
+    for i in 0..6 {
+        if quorum_client::propose_audit_entry(&connector, &addrs, T, ev("a", i))
+            .await
+            .is_ok()
+        {
+            appended += 1;
+        }
+    }
+    let t0 = Instant::now();
+    while t0.elapsed() < Duration::from_secs(10)
+        && !(0..N).all(|i| {
+            q_read_log(&nodes, i)
+                .map(|l| l.entries.len() >= appended)
+                .unwrap_or(false)
+        })
+    {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    kill_all(&mut children); // SIGKILL + wait
+    let after_kill: Vec<Result<usize, String>> = (0..N)
+        .map(|i| q_read_log(&nodes, i).map(|l| l.entries.len()))
+        .collect();
+    report.record(
+        "Q1: after SIGKILL of every node, each audit-log file parses, its hash chain verifies, and it holds all committed entries",
+        appended == 6 && after_kill.iter().all(|r| matches!(r, Ok(n) if *n == appended)),
+        format!("appended={appended} per_node={after_kill:?}"),
+    );
+
+    // ---- Q2: restart from the files; the log continues ----
+    for i in 0..N {
+        nodes.clear_outputs(i);
+    }
+    let mut children: Vec<Child> = (0..N).map(|i| nodes.spawn(i, false)).collect();
+    wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
+    let tip_before = quorum_client::fetch_majority_tip(&connector, &addrs).await;
+    let next = quorum_client::propose_audit_entry(&connector, &addrs, T, ev("b", 0)).await;
+    report.record(
+        "Q2: after restarting from the persisted files the majority tip is intact and a new entry lands at seq 6",
+        matches!(&tip_before, Ok(l) if l.entries.len() == 6)
+            && matches!(&next, Ok(e) if e.seq == 6),
+        format!(
+            "tip_len={:?} next={:?}",
+            tip_before.as_ref().map(|l| l.entries.len()).map_err(|e| e.clone()),
+            next.as_ref().map(|e| e.seq).map_err(|e| e.to_string())
+        ),
+    );
+
+    // ---- Q3: SIGKILL in the middle of a burst, 3 rounds ----
+    let mut q3_ok = true;
+    let mut q3_notes: Vec<String> = Vec::new();
+    for round in 0..3usize {
+        let burst = {
+            let connector = connector.clone();
+            let addrs = addrs.clone();
+            tokio::spawn(async move {
+                let mut ok = 0usize;
+                for i in 0..200 {
+                    let e = AuditEvent {
+                        invoice_id: format!("q-burst-{round}-{i}"),
+                        actor: "q".into(),
+                        action: "burst".into(),
+                        timestamp_unix_ms: 1 + i as u64,
+                    };
+                    if quorum_client::propose_audit_entry(&connector, &addrs, T, e)
+                        .await
+                        .is_ok()
+                    {
+                        ok += 1;
+                    }
+                }
+                ok
+            })
+        };
+        let delay = 150
+            + (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.subsec_nanos() as u64)
+                .unwrap_or(0)
+                % 600);
+        tokio::time::sleep(Duration::from_millis(delay)).await;
+        kill_all(&mut children);
+        burst.abort();
+        let lens: Vec<Result<usize, String>> = (0..N)
+            .map(|i| q_read_log(&nodes, i).map(|l| l.entries.len()))
+            .collect();
+        let intact = lens.iter().all(|r| r.is_ok());
+        q3_ok &= intact;
+        q3_notes.push(format!(
+            "round {round}: killed after {delay}ms lens={lens:?}"
+        ));
+        for i in 0..N {
+            nodes.clear_outputs(i);
+        }
+        children = (0..N).map(|i| nodes.spawn(i, false)).collect();
+        wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
+    }
+    report.record(
+        "Q3: 3 rounds of SIGKILL in the middle of an append burst never leave a corrupt or truncated audit log, and the cluster restarts every time",
+        q3_ok,
+        q3_notes.join(" | "),
+    );
+    kill_all(&mut children);
+
+    // ---- Q4-Q6: damaged log => refuse to start, never start empty ----
+    let valid = std::fs::read(nodes.path("audit_log.json", 1)).unwrap_or_default();
+    let mut tampered: serde_json::Value =
+        serde_json::from_slice(&valid).unwrap_or(serde_json::Value::Null);
+    if let Some(a) = tampered["entries"][1]["event"].get_mut("action") {
+        *a = serde_json::Value::String("tampered".into());
+    }
+    let cases: Vec<(&str, usize, Vec<u8>, &str)> = vec![
+        (
+            "Q4: a garbage audit-log file",
+            0,
+            b"not json at all".to_vec(),
+            "Q4",
+        ),
+        (
+            "Q5: a truncated audit-log file",
+            1,
+            valid[..valid.len() / 2].to_vec(),
+            "Q5",
+        ),
+        (
+            "Q6: an audit log whose hash chain was tampered with",
+            2,
+            serde_json::to_vec(&tampered).unwrap_or_default(),
+            "Q6",
+        ),
+    ];
+    for (name, id, bytes, _) in cases {
+        nodes.clear_outputs(id);
+        std::fs::write(nodes.path("audit_log.json", id), &bytes).unwrap();
+        let mut child = nodes.spawn(id, false);
+        let (refused, why) = p_exits_nonzero(&mut child, Duration::from_secs(15)).await;
+        let started = nodes.path("ready", id).exists();
+        let logtxt = std::fs::read_to_string(nodes.path("log", id)).unwrap_or_default();
+        let msg_ok = logtxt.contains("audit log");
+        report.record(
+            &format!("{name} makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log"),
+            refused && !started && msg_ok,
+            format!("exit_nonzero={refused} ({why}) ready_file_written={started} error_mentions_audit_log={msg_ok}"),
+        );
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+// =========================================================================
+// TEST R (F-19): an acknowledged audit entry is durable on >= t+1 nodes.
+// =========================================================================
+//
+// `propose_audit_entry` used to return Ok after FIRE-AND-FORGET replication,
+// so an entry the caller (and the service's outbox) treated as recorded could
+// exist on no disk if the cluster died right after. Each round: restart the
+// cluster, append one entry, and the INSTANT the call returns Ok, SIGKILL all
+// nodes. The entry must then be in at least t+1 = 3 node files.
+async fn test_r_ack_implies_durable(report: &mut Report) {
+    let work = PathBuf::from("/tmp/adversarial_test_r");
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let base_port = 9960u16;
+    let nodes = PNodes {
+        work: work.clone(),
+        ids: (0..N).map(|_| generate_identity()).collect(),
+        audit: (0..N).map(|_| generate_audit_keypair()).collect(),
+        client: generate_identity(),
+        addrs: (0..N)
+            .map(|i| format!("127.0.0.1:{}", base_port + i as u16))
+            .collect(),
+        auth_key: generate_service_auth_key(),
+    };
+    for id in 0..N {
+        nodes.write_kek(id);
+    }
+    let ready: Vec<PathBuf> = (0..N).map(|i| nodes.path("ready", i)).collect();
+    let connector = quorum_client::build_connector(
+        nodes.client.cert_der.clone(),
+        nodes.client.key_der.clone(),
+        nodes.ids.iter().map(|n| n.cert_der.clone()).collect(),
+    );
+    let addrs: Vec<(usize, String)> = nodes.addrs.iter().cloned().enumerate().collect();
+    let mut children: Vec<Child> = (0..N).map(|i| nodes.spawn(i, true)).collect();
+    wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
+
+    const ROUNDS: usize = 8;
+    let mut worst = usize::MAX;
+    let mut per_round: Vec<String> = Vec::new();
+    let mut acked_rounds = 0usize;
+    for round in 0..ROUNDS {
+        let r = quorum_client::propose_audit_entry(
+            &connector,
+            &addrs,
+            T,
+            AuditEvent {
+                invoice_id: format!("r-{round}"),
+                actor: "r".into(),
+                action: "r_action".into(),
+                timestamp_unix_ms: 1 + round as u64,
+            },
+        )
+        .await;
+        kill_all(&mut children); // immediately after the acknowledgement
+        if let Ok(entry) = r {
+            acked_rounds += 1;
+            let holders = (0..N)
+                .filter(|&i| {
+                    q_read_log(&nodes, i)
+                        .map(|l| l.entries.iter().any(|e| e.entry_hash == entry.entry_hash))
+                        .unwrap_or(false)
+                })
+                .count();
+            worst = worst.min(holders);
+            per_round.push(format!("r{round}:{holders}"));
+        } else {
+            per_round.push(format!("r{round}:ERR"));
+        }
+        for i in 0..N {
+            nodes.clear_outputs(i);
+        }
+        children = (0..N).map(|i| nodes.spawn(i, false)).collect();
+        wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
+    }
+    report.record(
+        "R: after propose returns Ok and every node is SIGKILLed immediately, the entry is on disk on at least t+1 nodes (every round)",
+        acked_rounds == ROUNDS && worst > T,
+        format!("acked_rounds={acked_rounds}/{ROUNDS} min_durable_holders={worst} (need >= {}) [{}]", T + 1, per_round.join(" ")),
+    );
+    kill_all(&mut children);
+}
+
+// =========================================================================
+// TEST S (Gap 3, step 1): one node's leaked auth key must not reach the others.
+// =========================================================================
+//
+// Every node used to hold the SAME derive-authorization secret, so stealing it
+// from any one node (config, backup, memory) let an attacker forge a request
+// that ALL nodes accepted: a full key derivation without the service. Now node
+// i is provisioned only with HKDF(master, i). The attacker below holds node 0's
+// REAL key and sends a validly MAC'd request to all 5 nodes. At most node 0
+// may answer, which is below the t+1 = 3 partials needed to derive anything.
+async fn test_s_leaked_node_key_is_contained(report: &mut Report) {
+    let mut q = spin_up_quorum("adversarial_test_s", 9830).await;
+    let leaked_node0_key = quorum_core::derive_node_auth_key(&q.service_auth_key, 0);
+    let attacker_sk = quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng());
+    let attacker_pk = attacker_sk.public_key();
+    // The restart guard refuses requests that predate the node's start window;
+    // wait it out so a refusal here can only come from the MAC check.
+    tokio::time::sleep(Duration::from_millis(
+        quorum_core::MAX_DERIVE_AUTH_WINDOW_MS - quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS + 500,
+    ))
+    .await;
+    let req = quorum_core::build_derive_request(
+        &leaked_node0_key,
+        "inv-never-registered-anywhere",
+        quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS,
+        attacker_pk,
+    );
+    let mut answered: Vec<usize> = Vec::new();
+    for i in 0..N {
+        if let Some(Message::DerivePartial { .. }) =
+            quorum_client::send_request(&q.connector, &q.addrs[i], &req).await
+        {
+            answered.push(i);
+        }
+    }
+    report.record(
+        "S1: a request forged with ONE node's leaked key is accepted by that node only (fewer than t+1 partials, no derivation possible)",
+        answered == vec![0] && answered.len() <= T,
+        format!("nodes that served the forged request: {answered:?} (need {} to derive)", T + 1),
+    );
     kill_all(&mut q.children);
 }
 
@@ -1168,6 +1966,7 @@ async fn test_g_http_pentest(report: &mut Report) {
                 "quorum_service never started listening",
             );
             let _ = service_child.kill();
+            let _ = service_child.wait();
             kill_all(&mut q.children);
             return;
         }
@@ -1523,6 +2322,7 @@ async fn test_j_sealed_share_retry_protocol(report: &mut Report) {
                 "quorum_service never started listening",
             );
             let _ = service_child.kill();
+            let _ = service_child.wait();
             kill_all(&mut q.children);
             return;
         }
@@ -1551,6 +2351,7 @@ async fn test_j_sealed_share_retry_protocol(report: &mut Report) {
             format!("setup failed: creating the invoice returned HTTP {status}: {body}"),
         );
         let _ = service_child.kill();
+        let _ = service_child.wait();
         kill_all(&mut q.children);
         return;
     }
@@ -1578,6 +2379,7 @@ async fn test_j_sealed_share_retry_protocol(report: &mut Report) {
             format!("round 1 derive-key call itself failed: HTTP {status1}: {body1}"),
         );
         let _ = service_child.kill();
+        let _ = service_child.wait();
         kill_all(&mut q.children);
         return;
     }
@@ -1600,6 +2402,7 @@ async fn test_j_sealed_share_retry_protocol(report: &mut Report) {
             "test premise didn't hold (see J1); rerun",
         );
         let _ = service_child.kill();
+        let _ = service_child.wait();
         kill_all(&mut q.children);
         return;
     }
@@ -1658,6 +2461,7 @@ async fn test_j_sealed_share_retry_protocol(report: &mut Report) {
                 ),
             );
             let _ = service_child.kill();
+            let _ = service_child.wait();
             kill_all(&mut q.children);
             return;
         }
@@ -2241,7 +3045,9 @@ async fn test_h_network_partition(report: &mut Report) {
                 .join(format!("node{id}.audit_log.json"))
                 .to_string_lossy()
                 .to_string(),
-            service_auth_key_b64: b64(&service_auth_key),
+            service_auth_key_b64: b64(&quorum_core::derive_node_auth_key(&service_auth_key, id)),
+            persistence: None,
+            allow_ephemeral_share: true, // throwaway test quorum
         };
         let config_path = work_dir.join(format!("node{id}.json"));
         std::fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
@@ -2363,6 +3169,339 @@ fn clear_iptables_block(ports: &[u16]) {
     }
 }
 
+// =========================================================================
+// TEST P (Gap 1): key shares survive a restart; bad/missing share => refuse.
+// =========================================================================
+struct PNodes {
+    work: PathBuf,
+    ids: Vec<GeneratedIdentity>,
+    audit: Vec<SigningKey>,
+    client: GeneratedIdentity,
+    addrs: Vec<String>,
+    auth_key: [u8; 32],
+}
+
+impl PNodes {
+    fn path(&self, kind: &str, id: usize) -> PathBuf {
+        self.work.join(format!("node{id}.{kind}"))
+    }
+    fn share_file(&self, id: usize) -> PathBuf {
+        self.work.join(format!("share{id}")).join("share.v1.json")
+    }
+    fn kek_file(&self, id: usize) -> PathBuf {
+        self.work.join("keks").join(format!("node{id}.kek"))
+    }
+    fn write_kek(&self, id: usize) {
+        use rand::RngCore;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(self.work.join("keks")).unwrap();
+        let mut k = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut k);
+        let p = self.kek_file(id);
+        let _ = std::fs::remove_file(&p);
+        std::fs::write(&p, k).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    fn config(
+        &self,
+        id: usize,
+        persistence: Option<quorum_core::config::SharePersistenceConfig>,
+    ) -> NodeConfig {
+        let peers: Vec<PeerConfig> = (0..N)
+            .filter(|&j| j != id)
+            .map(|j| PeerConfig {
+                id: j,
+                addr: self.addrs[j].clone(),
+                cert_der_b64: b64(&self.ids[j].cert_der),
+                audit_pubkey_b64: b64(&self.audit[j].verifying_key().to_bytes()),
+            })
+            .collect();
+        NodeConfig {
+            node_id: id,
+            listen_addr: self.addrs[id].clone(),
+            n: N,
+            t: T,
+            cert_der_b64: b64(&self.ids[id].cert_der),
+            key_der_b64: b64(&self.ids[id].key_der),
+            audit_keypair_b64: b64(&self.audit[id].to_bytes()),
+            peers,
+            client_cert_der_b64: b64(&self.client.cert_der),
+            ready_file: self.path("ready", id).to_string_lossy().to_string(),
+            pubkey_file: self.path("pubkey.json", id).to_string_lossy().to_string(),
+            audit_log_file: self
+                .path("audit_log.json", id)
+                .to_string_lossy()
+                .to_string(),
+            service_auth_key_b64: b64(&quorum_core::derive_node_auth_key(&self.auth_key, id)),
+            persistence,
+            allow_ephemeral_share: false,
+        }
+    }
+    fn launch(&self, id: usize, cfg: &NodeConfig, tag: &str) -> Child {
+        let cfg_path = self.path(&format!("{tag}.json"), id);
+        std::fs::write(&cfg_path, serde_json::to_vec_pretty(cfg).unwrap()).unwrap();
+        let log = std::fs::File::create(self.path("log", id)).unwrap();
+        Command::new(locate_sibling_binary("quorum_node"))
+            .arg(&cfg_path)
+            .stderr(log)
+            .spawn()
+            .unwrap()
+    }
+    /// `ceremony` = the explicit one-time init switch.
+    fn spawn(&self, id: usize, ceremony: bool) -> Child {
+        let cfg = self.config(
+            id,
+            Some(quorum_core::config::SharePersistenceConfig {
+                dir: self
+                    .work
+                    .join(format!("share{id}"))
+                    .to_string_lossy()
+                    .to_string(),
+                kek_file: self.kek_file(id).to_string_lossy().to_string(),
+                expected_group_pubkey_sha256_hex: None,
+                init_ceremony: ceremony,
+            }),
+        );
+        self.launch(id, &cfg, "cfg")
+    }
+    /// NEITHER `persistence` NOR `allow_ephemeral_share`.
+    fn spawn_unconfigured(&self, id: usize) -> Child {
+        let cfg = self.config(id, None);
+        self.launch(id, &cfg, "unconfigured")
+    }
+    fn clear_outputs(&self, id: usize) {
+        let _ = std::fs::remove_file(self.path("ready", id));
+        let _ = std::fs::remove_file(self.path("pubkey.json", id));
+    }
+}
+
+/// True iff the child exits with a non-zero status within `within`.
+async fn p_exits_nonzero(child: &mut Child, within: Duration) -> (bool, String) {
+    let deadline = Instant::now() + within;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return (!status.success(), format!("{status}")),
+            Ok(None) => {}
+            Err(e) => return (false, format!("try_wait error {e}")),
+        }
+        if Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return (
+                false,
+                format!("still running after {within:?} (did not refuse)"),
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+async fn test_p_share_persistence(report: &mut Report) {
+    let work = PathBuf::from("/tmp/adversarial_test_p");
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let base_port = 9900u16;
+    let nodes = PNodes {
+        work: work.clone(),
+        ids: (0..N).map(|_| generate_identity()).collect(),
+        audit: (0..N).map(|_| generate_audit_keypair()).collect(),
+        client: generate_identity(),
+        addrs: (0..N)
+            .map(|i| format!("127.0.0.1:{}", base_port + i as u16))
+            .collect(),
+        auth_key: generate_service_auth_key(),
+    };
+    for id in 0..N {
+        nodes.write_kek(id);
+    }
+    let ready: Vec<PathBuf> = (0..N).map(|i| nodes.path("ready", i)).collect();
+    let guard = Duration::from_millis(
+        quorum_core::MAX_DERIVE_AUTH_WINDOW_MS - quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_MS + 500,
+    );
+    let connector = quorum_client::build_connector(
+        nodes.client.cert_der.clone(),
+        nodes.client.key_der.clone(),
+        nodes.ids.iter().map(|n| n.cert_der.clone()).collect(),
+    );
+    let addrs: Vec<(usize, String)> = nodes.addrs.iter().cloned().enumerate().collect();
+    let identity = "p-invoice-1";
+    let transport_sk = quorum_vetseal::TransportSecretKey::random(&mut rand::thread_rng());
+    let transport_pk = transport_sk.public_key();
+
+    // ---- Phase 1: one-time ceremony ----
+    let mut children: Vec<Child> = (0..N).map(|i| nodes.spawn(i, true)).collect();
+    wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
+    tokio::time::sleep(guard).await;
+    let pk_before: Vec<Vec<u8>> = (0..N)
+        .map(|i| std::fs::read(nodes.path("pubkey.json", i)).unwrap_or_default())
+        .collect();
+    let group_before: PublicKeySet = serde_json::from_slice(&pk_before[0]).unwrap();
+    let derive = |gp: PublicKeySet| {
+        let connector = connector.clone();
+        let addrs = addrs.clone();
+        let key = nodes.auth_key;
+        let tpk = transport_pk;
+        async move {
+            quorum_client::collect_sealed_derived_key(
+                &connector,
+                &addrs,
+                identity,
+                T,
+                &key,
+                &tpk,
+                &gp,
+                quorum_client::ProofPolicy::Require,
+                &[],
+            )
+            .await
+        }
+    };
+    let before = derive(group_before.clone()).await;
+    let key_before = before.as_ref().ok().and_then(|c| {
+        quorum_client::open_sealed_derived_key(&c.sealed, &transport_sk, &group_before, identity)
+            .ok()
+    });
+    let files_ok = (0..N).all(|i| nodes.share_file(i).exists());
+    report.record(
+        "P1: after the ceremony every node has persisted an encrypted share file and a derive works",
+        files_ok && key_before.is_some(),
+        format!("share files present={files_ok} derive_ok={}", key_before.is_some()),
+    );
+
+    // Leak check material: raw shares are not extractable from outside, so the
+    // check below scans for the KEK bytes (hex and base64) in every node log
+    // and in the share files.
+    let mut kek_needles: Vec<String> = Vec::new();
+    for i in 0..N {
+        use base64::Engine;
+        let k = std::fs::read(nodes.kek_file(i)).unwrap();
+        kek_needles.push(k.iter().map(|b| format!("{b:02x}")).collect());
+        kek_needles.push(base64::engine::general_purpose::STANDARD.encode(&k));
+    }
+
+    // ---- Phase 2: stop ALL nodes, restart ALL without the ceremony switch ----
+    kill_all(&mut children);
+    for i in 0..N {
+        nodes.clear_outputs(i);
+    }
+    let mut children: Vec<Child> = (0..N).map(|i| nodes.spawn(i, false)).collect();
+    wait_for_ready(&ready, &mut children, Duration::from_secs(30)).await;
+    tokio::time::sleep(guard).await;
+    let pk_after: Vec<Vec<u8>> = (0..N)
+        .map(|i| std::fs::read(nodes.path("pubkey.json", i)).unwrap_or_default())
+        .collect();
+    report.record(
+        "P2: group public key is UNCHANGED after stopping and restarting every node",
+        pk_before == pk_after && !pk_after[0].is_empty(),
+        format!("identical on all {N} nodes = {}", pk_before == pk_after),
+    );
+    let group_after: PublicKeySet =
+        serde_json::from_slice(&pk_after[0]).unwrap_or_else(|_| group_before.clone());
+    let after = derive(group_after.clone()).await;
+    let key_after = after.as_ref().ok().and_then(|c| {
+        quorum_client::open_sealed_derived_key(&c.sealed, &transport_sk, &group_before, identity)
+            .ok()
+    });
+    report.record(
+        "P3: a pre-restart invoice key is still derivable and is byte-identical (verifies against the ORIGINAL group key)",
+        matches!((&key_before, &key_after), (Some(a), Some(b)) if a.to_bytes() == b.to_bytes()),
+        format!("before_some={} after_some={}", key_before.is_some(), key_after.is_some()),
+    );
+    // P8 (leak check) runs while the healthy logs exist.
+    let mut leaked = Vec::new();
+    for i in 0..N {
+        let log = std::fs::read_to_string(nodes.path("log", i)).unwrap_or_default();
+        let shr = std::fs::read_to_string(nodes.share_file(i)).unwrap_or_default();
+        for n in &kek_needles {
+            if log.contains(n.as_str()) || shr.contains(n.as_str()) {
+                leaked.push(i);
+            }
+        }
+    }
+    report.record(
+        "P8: no node log or share file contains any node's KEK (hex or base64)",
+        leaked.is_empty() && !kek_needles.is_empty(),
+        format!("nodes with a hit: {leaked:?}"),
+    );
+    kill_all(&mut children);
+
+    // ---- Phase 3: bad share material => refuse, never silently run DKG ----
+    // P4: corrupted share file (one flipped byte in the middle).
+    {
+        let f = nodes.share_file(2);
+        let mut raw = std::fs::read(&f).unwrap_or_default();
+        let had_file = !raw.is_empty();
+        if raw.is_empty() {
+            raw = b"x".to_vec();
+        }
+        let mid = raw.len() / 2;
+        raw[mid] ^= 0x01;
+        std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+        std::fs::write(&f, raw).unwrap();
+        nodes.clear_outputs(2);
+        let mut c = nodes.spawn(2, false);
+        let (refused, note) = p_exits_nonzero(&mut c, Duration::from_secs(6)).await;
+        let no_outputs = !nodes.path("ready", 2).exists() && !nodes.path("pubkey.json", 2).exists();
+        report.record(
+            "P4: a node with a CORRUPTED share file refuses to start (non-zero exit, no ready/pubkey output, no DKG)",
+            had_file && refused && no_outputs,
+            format!("{note}; no outputs written={no_outputs}"),
+        );
+    }
+    // P5: missing share file, no ceremony switch.
+    {
+        let _ = std::fs::remove_file(nodes.share_file(3));
+        nodes.clear_outputs(3);
+        let mut c = nodes.spawn(3, false);
+        let (refused, note) = p_exits_nonzero(&mut c, Duration::from_secs(6)).await;
+        let no_outputs = !nodes.path("ready", 3).exists();
+        report.record(
+            "P5: a node with a MISSING share file (and no ceremony switch) refuses to start instead of re-running DKG",
+            refused && no_outputs,
+            format!("{note}; no ready file={no_outputs}"),
+        );
+    }
+    // P6: right file, wrong KEK.
+    {
+        nodes.write_kek(4);
+        nodes.clear_outputs(4);
+        let mut c = nodes.spawn(4, false);
+        let (refused, note) = p_exits_nonzero(&mut c, Duration::from_secs(6)).await;
+        report.record(
+            "P6: a node whose KEK cannot decrypt its share file refuses to start",
+            refused && !nodes.path("ready", 4).exists(),
+            note,
+        );
+    }
+    // P7: ceremony switch while a share exists must never overwrite it.
+    {
+        let before = std::fs::read(nodes.share_file(1)).unwrap_or_default();
+        nodes.clear_outputs(1);
+        let mut c = nodes.spawn(1, true);
+        let (refused, note) = p_exits_nonzero(&mut c, Duration::from_secs(6)).await;
+        let unchanged = !before.is_empty()
+            && std::fs::read(nodes.share_file(1))
+                .map(|a| a == before)
+                .unwrap_or(false);
+        report.record(
+            "P7: init_ceremony=true with an existing share file is refused and the share file is left untouched",
+            refused && unchanged,
+            format!("{note}; share file unchanged={unchanged}"),
+        );
+    }
+    // P9: forgetting the persistence section must NOT silently mean "ephemeral".
+    {
+        nodes.clear_outputs(0);
+        let mut c = nodes.spawn_unconfigured(0);
+        let (refused, note) = p_exits_nonzero(&mut c, Duration::from_secs(6)).await;
+        report.record(
+            "P9: a config with no `persistence` and no explicit allow_ephemeral_share refuses to start (fail closed)",
+            refused && !nodes.path("ready", 0).exists(),
+            note,
+        );
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // Harness change (roadmap T1-1 / T1-5): `--only A,E` runs a subset of
@@ -2380,7 +3519,17 @@ async fn main() {
                     .collect()
             })
     };
-    let want = |c: char| only.as_ref().map_or(true, |o| o.contains(&c));
+    let want = |c: char| only.as_ref().is_none_or(|o| o.contains(&c));
+    // Group X is a probe, not part of the default run: it runs only when named.
+    let want_x = only.as_ref().is_some_and(|o| o.contains(&'X'));
+    let proposers: usize = {
+        let args: Vec<String> = std::env::args().collect();
+        args.iter()
+            .position(|a| a == "--proposers")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3)
+    };
 
     println!("=== Phase 4: Adversarial Testing (run against the real system) ===\n");
     let mut report = Report::new();
@@ -2436,6 +3585,34 @@ async fn main() {
     if want('N') {
         println!("\n--- Test N: crypto cutover guard ---");
         test_n_cutover_guard(&mut report).await;
+    }
+    if want_x {
+        println!("\n--- Test X: {proposers} concurrent audit proposers (opt-in probe) ---");
+        test_x_n_concurrent_proposers(&mut report, proposers).await;
+    }
+    if only.as_ref().is_some_and(|o| o.contains(&'Y')) {
+        println!("\n--- Test Y: forced vote split (opt-in, F-13) ---");
+        test_y_forced_vote_split(&mut report).await;
+    }
+    if want('Z') {
+        println!("\n--- Test Z: service audit semantics (F-13/F-14) ---");
+        test_z_service_audit_semantics(&mut report).await;
+    }
+    if want('P') {
+        println!("\n--- Test P: key-share persistence across restart (Gap 1) ---");
+        test_p_share_persistence(&mut report).await;
+    }
+    if want('Q') {
+        println!("\n--- Test Q: audit-log durability (Gap 13) ---");
+        test_q_audit_log_durability(&mut report).await;
+    }
+    if want('R') {
+        println!("\n--- Test R: acknowledged => durable (F-19) ---");
+        test_r_ack_implies_durable(&mut report).await;
+    }
+    if want('S') {
+        println!("\n--- Test S: leaked single-node auth key (Gap 3 step 1) ---");
+        test_s_leaked_node_key_is_contained(&mut report).await;
     }
     if want('H') {
         println!("\n--- Test H: real network partition ---");

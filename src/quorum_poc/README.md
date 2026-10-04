@@ -16,8 +16,7 @@ cargo run -p quorum_poc
 
 No `dfx`, no IC replica, no network access needed — this crate is pure
 `blstrs` + std, needs none of the Internet Computer SDK, and builds on the
-same rustc 1.75 this whole workspace is currently pinned to (see the
-top-level README for why).
+same rustc this whole workspace is pinned to (see `rust-toolchain.toml`).
 
 ## What it proves (Phase 0 exit criteria: "working DKG+derive PoC")
 

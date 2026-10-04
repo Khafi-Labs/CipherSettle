@@ -1,0 +1,19 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+
+--- Test Q: audit-log durability (Gap 13) ---
+[PASS] Q1: after SIGKILL of every node, each audit-log file parses, its hash chain verifies, and it holds all committed entries: appended=6 per_node=[Ok(6), Ok(6), Ok(6), Ok(6), Ok(6)]
+[PASS] Q2: after restarting from the persisted files the majority tip is intact and a new entry lands at seq 6: tip_len=Ok(6) next=Ok(6)
+[FAIL] Q3: 3 rounds of SIGKILL in the middle of an append burst never leave a corrupt or truncated audit log, and the cluster restarts every time: round 0: killed after 246ms lens=[Ok(8), Ok(8), Ok(8), Ok(8), Ok(8)] | round 1: killed after 541ms lens=[Err("parse: EOF while parsing a value at line 1 column 0"), Ok(12), Ok(11), Ok(11), Ok(11)] | round 2: killed after 667ms lens=[Err("parse: EOF while parsing a value at line 1 column 0"), Ok(12), Ok(11), Ok(11), Ok(11)]
+[FAIL] Q4: a garbage audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log: exit_nonzero=false (still running after 15s (did not refuse)) ready_file_written=true error_mentions_audit_log=true
+[FAIL] Q5: a truncated audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log: exit_nonzero=false (still running after 15s (did not refuse)) ready_file_written=true error_mentions_audit_log=true
+[FAIL] Q6: an audit log whose hash chain was tampered with makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log: exit_nonzero=false (still running after 15s (did not refuse)) ready_file_written=true error_mentions_audit_log=false
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] Q1: after SIGKILL of every node, each audit-log file parses, its hash chain verifies, and it holds all committed entries -- appended=6 per_node=[Ok(6), Ok(6), Ok(6), Ok(6), Ok(6)]
+  [PASS] Q2: after restarting from the persisted files the majority tip is intact and a new entry lands at seq 6 -- tip_len=Ok(6) next=Ok(6)
+  [FAIL] Q3: 3 rounds of SIGKILL in the middle of an append burst never leave a corrupt or truncated audit log, and the cluster restarts every time -- round 0: killed after 246ms lens=[Ok(8), Ok(8), Ok(8), Ok(8), Ok(8)] | round 1: killed after 541ms lens=[Err("parse: EOF while parsing a value at line 1 column 0"), Ok(12), Ok(11), Ok(11), Ok(11)] | round 2: killed after 667ms lens=[Err("parse: EOF while parsing a value at line 1 column 0"), Ok(12), Ok(11), Ok(11), Ok(11)]
+  [FAIL] Q4: a garbage audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log -- exit_nonzero=false (still running after 15s (did not refuse)) ready_file_written=true error_mentions_audit_log=true
+  [FAIL] Q5: a truncated audit-log file makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log -- exit_nonzero=false (still running after 15s (did not refuse)) ready_file_written=true error_mentions_audit_log=true
+  [FAIL] Q6: an audit log whose hash chain was tampered with makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log -- exit_nonzero=false (still running after 15s (did not refuse)) ready_file_written=true error_mentions_audit_log=false
+2/6 checks passed as expected.
