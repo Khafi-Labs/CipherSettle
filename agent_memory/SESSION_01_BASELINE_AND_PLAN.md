@@ -233,3 +233,10 @@ Failing first: `--only R` on the previous build: 0 durable holders per acknowled
 - Fixed by correcting the docs to match the code (NOT by creating the missing SBOM/workflow). Self-test proves C1..C5 can each fail. Wired into ci.yml and run_local_regression.sh (+ the Dockerfile policy step).
 - EXECUTED on rustc 1.97.0: ALL regression steps pass (185 unit tests, adversarial 80/80): `evidence/regression_summary_session21_gap17.txt`.
 - NOT done: a manual prose read of README/ARCHITECTURE/PHASE*_README against the code. Gap 17 stays OPEN.
+
+# Session 22: Gap 17 continued — README read claim by claim; group H run for the first time
+- Checker extended (C4 'N checks across', C6 advisory count, C7 id ranges, C8 routes both ways, C9 `cargo -p` names) and shown FAILING before fixes (`evidence/test_docs_claims_v2_before_fix_session22.log`: 4 failures; `..._v3_...`: C8 flagged undocumented `GET /metrics`). Self-test now proves C1-C9 each fire.
+- README read claim by claim; 7 stale claims fixed: stale '41 checks/14 groups' (3 places incl. ARCHITECTURE; PHASE4 marked as the original dated count), 'toolchain unpinning' listed as open (done in Gap 7), 'shared HMAC secret' (now per-node HKDF keys, service still a single authority), 'full-quorum restart produces a new group key' (false with share persistence configured; true without), 'seven advisories' (three), 'group H never observed passing' (see below), plus the omitted newer groups. Operational endpoints (healthz/readyz/metrics) now documented in deploy/README.md.
+- EXECUTED (first time): `quorum_adversarial --only H` with real iptables rules (root in the sandbox): H1, H2 = 2/2, ~4 s, rules cleaned up (`evidence/test_h_partition_session22.log`). A CI step for it was added (sudo; NEVER run on GitHub, UNVERIFIED there).
+- EXECUTED on rustc 1.97.0: ALL regression steps pass, 185 unit tests, adversarial 80/80 (`evidence/regression_summary_session22_gap17b.txt`).
+- NOT done: line-by-line reads of ARCHITECTURE, FINANCIAL_CONTEXT, THREAT_MODEL, CRYPTO_DECISIONS, CONTRIBUTING, PHASE1-3 READMEs. Gap 17 stays OPEN.

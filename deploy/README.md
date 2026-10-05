@@ -44,3 +44,11 @@ secret) at those paths. LIMITS: read once at process start (a rotated secret nee
 the value lives in process memory; Kubernetes secret mounts default to mode 0644 so set `defaultMode: 0400`; relative
 paths resolve against the process working directory (use absolute paths); `cert_der_b64` fields are public and stay inline.
 The KEK file for share encryption (`share_store`) is already a separate 0600 file and is unchanged.
+
+## Operational endpoints (EXECUTED tests, group Z)
+* `GET /healthz` — liveness, unauthenticated, always `200 ok` while the process serves HTTP.
+* `GET /readyz` — readiness, unauthenticated: `200 ready` only if Postgres answers AND at least t+1 (3 of 5) quorum nodes
+  answer a filtered read over the pinned mTLS channel; otherwise `503` (`database unavailable` / `quorum unavailable`, no
+  node or address in the body). Result cached 1 s. Reachability, not proof that nodes hold shares.
+* `GET /metrics` — Prometheus text, ADMIN API key required (401 without a key, 403 for a non-admin key): audit outbox rows
+  by status, age of the oldest undelivered audit, invoices, audit failures. No latency or error-rate series yet.

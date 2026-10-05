@@ -159,6 +159,11 @@ jobs:
         with:
           name: adversarial-log
           path: adversarial.log
+      - name: Group H, a real iptables network partition (needs root; first observed passing locally in session 22)
+        run: |
+          set -o pipefail
+          sudo -E env "PATH=$PATH" "$(command -v cargo)" run --locked -p quorum_adversarial -- --only H | tee partition.log
+          grep -q '^2/2 checks passed as expected\.' partition.log && ! grep -q '^\[FAIL\]' partition.log
 
   db-guard-negative:
     name: negative test, a broken DB setup must FAIL, not skip

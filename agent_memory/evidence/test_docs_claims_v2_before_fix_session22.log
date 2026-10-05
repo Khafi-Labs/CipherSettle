@@ -1,0 +1,4 @@
+FAIL: C4 PHASE4_README.md claims 41 adversarial checks but CI asserts 80
+FAIL: C4 README.md claims 41 adversarial checks but CI asserts 80
+FAIL: C4 docs/ARCHITECTURE.md claims 41 adversarial checks but CI asserts 80
+FAIL: C6 README.md says Seven accepted advisories but deny.toml ignores 3

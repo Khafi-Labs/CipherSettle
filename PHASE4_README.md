@@ -23,7 +23,7 @@ written by the same process that built the system it attacks.
 **`quorum_adversarial`** — a binary that spins up real, fresh quorums
 (via the same `quorum_node` binary every other phase uses) and attacks
 them, printing a PASS/FAIL verdict with a concrete explanation for each
-of **41 checks across 14 test groups (A–N)**. Nothing here is simulated at the
+of **41 original checks in 14 test groups (A–N)** (a dated record: the suite has since grown, see `README.md`). Nothing here is simulated at the
 protocol level: every attack goes over real mTLS, real HTTP, and a real
 Postgres, with group H using a real `iptables`-enforced network partition.
 

@@ -1,0 +1,1 @@
+FAIL: C8 route 'GET /metrics' is registered in quorum_service but documented nowhere
