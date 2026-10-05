@@ -1065,6 +1065,17 @@ async fn z_scalar_string(
         .map_err(|e| e.to_string())
 }
 
+/// Value of one Prometheus text-format sample line (`name{labels} value`).
+fn z_metric(text: &str, series: &str) -> Option<f64> {
+    text.lines()
+        .find(|l| l.starts_with(series) && l[series.len()..].starts_with(' '))
+        .and_then(|l| l[series.len()..].trim().parse::<f64>().ok())
+}
+
+async fn z_metrics(addr: &str, key: Option<&str>) -> (u16, String) {
+    http_json(addr, "GET", "/metrics", key, None).await
+}
+
 async fn test_z_service_audit_semantics(report: &mut Report) {
     let mut q = spin_up_quorum("adversarial_test_z", 9800).await;
     let (db, conn) = match tokio_postgres::connect(Z_DB, tokio_postgres::NoTls).await {
@@ -1101,7 +1112,7 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
     };
     let config = serde_json::json!({
         "listen_addr": service_addr, "db_url": Z_DB, "admin_caller_id": "z-admin",
-        "api_keys": [{"key_file": apikey_file.to_string_lossy(), "caller_id": "z-issuer"}],
+        "api_keys": [{"key_file": apikey_file.to_string_lossy(), "caller_id": "z-issuer"}, {"key": "z-admin-key", "caller_id": "z-admin"}],
         "client_cert_der_b64": b64(&q.client_identity.cert_der),
         "client_key_der_b64": b64(&q.client_identity.key_der),
         "service_auth_key_file": master_file.to_string_lossy(),
@@ -1201,6 +1212,17 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
         "Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change)",
         granted == 5 && st2 == 202 && body2.contains("pending"),
         format!("split_votes={granted}/5 http={st2} body={}", body2.chars().take(160).collect::<String>()),
+    );
+    let (mst, mbody) = z_metrics(&service_addr, Some("z-admin-key")).await;
+    let pend = z_metric(&mbody, "ciphersettle_audit_outbox_rows{status=\"pending\"}");
+    let age = z_metric(
+        &mbody,
+        "ciphersettle_audit_outbox_oldest_unfinished_age_seconds",
+    );
+    report.record(
+        "Z7a: while an audit is pending, /metrics shows it (pending >= 1, oldest age > 0) so an alert can fire",
+        mst == 200 && pend.is_some_and(|v| v >= 1.0) && age.is_some_and(|v| v > 0.0),
+        format!("status={mst} pending={pend:?} oldest_age_s={age:?}"),
     );
     report.record(
         "Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record",
@@ -1321,6 +1343,73 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
         "Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving",
         st_bad == 400 && (st_ok == 201 || st_ok == 202),
         format!("bad_status={st_bad} body={body_bad:?} next_valid_status={st_ok}"),
+    );
+
+    // ---- Z7 (Gap 11): /metrics is admin-only and matches the database.
+    let (st_noauth, _) = z_metrics(&service_addr, None).await;
+    let (st_issuer, _) = z_metrics(&service_addr, Some(key)).await;
+    report.record(
+        "Z7b: /metrics requires authentication (401 without a key) and the admin (403 for a non-admin key)",
+        st_noauth == 401 && st_issuer == 403,
+        format!("no_key={st_noauth} issuer_key={st_issuer}"),
+    );
+    // Let the drainer finish everything, then compare gauges with SQL truth.
+    let t0 = Instant::now();
+    loop {
+        let open: i64 = db
+            .query_one(
+                "SELECT count(*) FROM audit_outbox WHERE status <> 'done'",
+                &[],
+            )
+            .await
+            .map(|r| r.get(0))
+            .unwrap_or(-1);
+        if open == 0 || t0.elapsed() > Duration::from_secs(20) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    let (_, m) = z_metrics(&service_addr, Some("z-admin-key")).await;
+    let sql_done: i64 = db
+        .query_one(
+            "SELECT count(*) FROM audit_outbox WHERE status = 'done'",
+            &[],
+        )
+        .await
+        .map(|r| r.get(0))
+        .unwrap_or(-1);
+    let sql_inv: i64 = db
+        .query_one("SELECT count(*) FROM invoices", &[])
+        .await
+        .map(|r| r.get(0))
+        .unwrap_or(-1);
+    let sql_fail: i64 = db
+        .query_one("SELECT count(*) FROM audit_failures", &[])
+        .await
+        .map(|r| r.get(0))
+        .unwrap_or(-1);
+    let g_done = z_metric(&m, "ciphersettle_audit_outbox_rows{status=\"done\"}");
+    let g_pend = z_metric(&m, "ciphersettle_audit_outbox_rows{status=\"pending\"}");
+    let g_inv = z_metric(&m, "ciphersettle_invoices_total");
+    let g_fail = z_metric(&m, "ciphersettle_audit_failures_total");
+    let g_age = z_metric(
+        &m,
+        "ciphersettle_audit_outbox_oldest_unfinished_age_seconds",
+    );
+    let leaks = [
+        "z-issuer-key",
+        "z-admin-key",
+        "postgres://",
+        "ciphersettle_dev",
+        "api_key",
+    ]
+    .iter()
+    .any(|s| m.contains(s));
+    report.record(
+        "Z7c: /metrics gauges equal the database (done/invoices/failures), nothing pending after drain, age 0, and no secret appears in the output",
+        g_done == Some(sql_done as f64) && g_pend == Some(0.0) && g_inv == Some(sql_inv as f64)
+            && g_fail == Some(sql_fail as f64) && g_age == Some(0.0) && !leaks,
+        format!("done={g_done:?}/{sql_done} pending={g_pend:?} invoices={g_inv:?}/{sql_inv} failures={g_fail:?}/{sql_fail} age={g_age:?} leaks={leaks}"),
     );
 
     // ---- Z5 (Gap 8 / T-9): malformed-body sweep over every POST route. No

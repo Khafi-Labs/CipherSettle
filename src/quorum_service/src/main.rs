@@ -444,6 +444,45 @@ struct RegisterInvoiceResp {
 }
 
 /// Gap 11: liveness. No auth, no state, no secrets: "the process is serving HTTP".
+/// Gap 11: Prometheus metrics, ADMIN-ONLY (operational data about audit
+/// backlog; scrape with the admin API key as a bearer token). Database-derived
+/// gauges only: there are NO request-latency or error-rate counters yet.
+async fn metrics(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<
+    (
+        StatusCode,
+        [(axum::http::header::HeaderName, &'static str); 1],
+        String,
+    ),
+    ApiError,
+> {
+    let caller_id = authenticate(&headers, &state)?;
+    if caller_id != state.admin_caller_id {
+        return Err(ApiError::Forbidden(
+            "only the admin can read metrics".to_string(),
+        ));
+    }
+    let client = state
+        .db
+        .get()
+        .await
+        .map_err(|e| ApiError::Internal(format!("db pool error: {e}")))?;
+    let snap = db::metrics_snapshot(&client)
+        .await
+        .map_err(|e| ApiError::Internal(format!("metrics query failed: {e}")))?;
+    let now = i64::try_from(now_ms()).unwrap_or(i64::MAX);
+    Ok((
+        StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
+        db::render_metrics(&snap, now),
+    ))
+}
+
 async fn healthz() -> &'static str {
     "ok"
 }
@@ -1305,6 +1344,7 @@ async fn main() {
         .route("/invoices/:id/derive-key", post(derive_invoice_key))
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .route("/metrics", get(metrics))
         .route("/audit-log", get(get_audit_log))
         .route("/invoices/:id/merkle-proof", get(get_merkle_proof))
         .route("/regulators", post(register_regulator))

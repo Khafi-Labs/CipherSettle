@@ -217,3 +217,8 @@ Failing first: `--only R` on the previous build: 0 durable holders per acknowled
 - EXECUTED on rustc 1.97.0: unit tests 183 pass / 0 fail, adversarial 75/75, all other regression steps pass (`evidence/regression_summary_session18_gap9_slice1.txt`).
 - NOT done (Gap 9 stays OPEN): certificate rotation, online secret rotation, secret-manager client, orchestrator still writes inline-secret configs, secrets remain in process memory.
 - Operator docs: `deploy/README.md` "Secrets from files". Note for operators: Kubernetes secret mounts default to 0644 and will be REFUSED until `defaultMode: 0400`.
+
+# Session 19: Gap 11 slice 2 — metrics, alert rules, runbook
+- Tests first: Z7a/b/c added to group Z and FAILED with 404 before the endpoint existed (`evidence/test_z7_before_fix_session19.log`, 9/12). Then `GET /metrics` (admin-only Prometheus text): audit outbox rows by status, oldest unfinished age, invoices, audit failures. Z7a observes a real pending audit (pending=1, age 0.93 s) during a forced split-vote; Z7b 401 without key / 403 for a non-admin key; Z7c gauges equal SQL after drain and no secret in output. Mutation check: removing the admin check turned Z7b red (issuer key got 200).
+- Suite is now 78/78 (ci.yml, run_local_regression.sh, runbook updated). EXECUTED on rustc 1.97.0: ALL regression steps pass, 185 unit tests (`evidence/regression_summary_session19_gap11_slice2.txt`).
+- Added `deploy/alerts.yml` and `docs/RUNBOOK_audit_backlog.md`: UNVERIFIED (YAML-parsed only; never loaded in Prometheus/promtool; never used in a drill). Gap 11 stays OPEN: no latency/error counters, no structured logging, no log shipping, `/readyz` ignores quorum liveness.

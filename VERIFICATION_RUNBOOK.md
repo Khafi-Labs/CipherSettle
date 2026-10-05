@@ -34,7 +34,7 @@ git log --oneline | head -3
 Caveat inherited from earlier sessions: the tree was reconstructed from a
 baseline zip plus delta archives; sessions 9-10 are covered by no archive.
 Compare against your real repository before trusting it. If the adversarial
-suite reports a count other than `75/75`, diff against your repository first.
+suite reports a count other than `78/78`, diff against your repository first.
 
 ## 2. Full CI on Rust 1.97
 
@@ -48,7 +48,7 @@ gh run watch --exit-status           # or open the Actions tab
 Jobs (all must be green): `lint` (pin assertion, dependency-pin policy, fmt,
 clippy `-D warnings`, fuzz-setup consistency, fuzz-gate self-test, fuzz crate
 type-check), `test` (DB required, unit tests incl. corpus replay, DB-ran
-assertion), `adversarial` (suite must print exactly `75/75 checks passed as
+assertion), `adversarial` (suite must print exactly `78/78 checks passed as
 expected.`, no `[FAIL]` line), `db-guard-negative` (a broken DB must FAIL CI),
 `supply-chain` (`cargo audit`, `cargo deny check`).
 
@@ -69,7 +69,7 @@ cat verification_out/summary.txt
 It runs the pin assertion, dependency-pin policy, fuzz setup checks, fmt,
 clippy, fuzz crate type-check, build, all unit tests (DB required), the
 DB-really-ran assertion, the broken-DB negative test and the adversarial suite
-(must be exactly 75/75). It does not run: GitHub Actions, cargo audit/deny,
+(must be exactly 78/78). It does not run: GitHub Actions, cargo audit/deny,
 fuzzing, the orchestrator, power-loss or the Test E campaign. Extra local
 checks:
 
@@ -142,7 +142,7 @@ Covered by 2a/2b. The adversarial suite alone:
 ```bash
 bash ci/setup_test_db.sh
 cargo run --locked -p quorum_adversarial -- --only A,B,C,D,M,L,E,I,F,G,J,K,N,Z,P,Q,R,S,W | tee adversarial.log
-grep -q '^75/75 checks passed as expected\.' adversarial.log && ! grep -q '^\[FAIL\]' adversarial.log && echo OK
+grep -q '^78/78 checks passed as expected\.' adversarial.log && ! grep -q '^\[FAIL\]' adversarial.log && echo OK
 ```
 
 Group H (real network partition) needs iptables and root, and is not in the CI

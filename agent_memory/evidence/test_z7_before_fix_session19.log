@@ -1,0 +1,351 @@
+=== Phase 4: Adversarial Testing (run against the real system) ===
+
+
+--- Test Z: service audit semantics (F-13/F-14) ---
+[node 2] starting: n=5 t=2 listen=127.0.0.1:9802
+[node 2] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 1] starting: n=5 t=2 listen=127.0.0.1:9801
+[node 1] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 4] starting: n=5 t=2 listen=127.0.0.1:9804
+[node 4] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0] starting: n=5 t=2 listen=127.0.0.1:9800
+[node 0] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 3] starting: n=5 t=2 listen=127.0.0.1:9803
+[node 3] WARNING: share persistence is NOT configured; restarting this node re-runs DKG and produces a NEW group key. Never use this mode with real data.
+[node 0 -> 2] sent commitment + share
+[node 0 -> 4] sent commitment + share
+[node 4 -> 0] sent commitment + share
+[node 1 -> 2] sent commitment + share
+[node 1 -> 3] sent commitment + share
+[node 0 -> 3] sent commitment + share
+[node 1 -> 4] sent commitment + share
+[node 1 -> 0] sent commitment + share
+[node 3 -> 1] sent commitment + share
+[node 3 -> 2] sent commitment + share
+[node 3 -> 0] sent commitment + share
+[node 3 -> 4] sent commitment + share
+[node 4 -> 1] sent commitment + share
+[node 2 -> 4] sent commitment + share
+[node 0 -> 1] sent commitment + share
+[node 4] DKG finalized.
+[node 4 -> 3] sent commitment + share
+[node 2 -> 3] sent commitment + share
+[node 4 -> 2] sent commitment + share
+[node 2 -> 1] sent commitment + share
+[node 2 -> 0] sent commitment + share
+[node 3] DKG finalized.
+[node 2] DKG finalized.
+[node 0] DKG finalized.
+[node 1] DKG finalized.
+[service] connecting to Postgres (pooled)...
+[service] crypto epoch "blstrs-rfc9380-v1" confirmed for this database.
+[service] schema ready (16 max pooled connections).
+[service] merkle log rebuilt: 555 leaves.
+[service] listening on 127.0.0.1:9809
+[service] TLS not configured -- only permitted because listen_addr is loopback (checked at startup)
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 3] co-signed (pending) audit entry seq 0.
+[node 4] co-signed (pending) audit entry seq 0.
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[service] AUDIT PENDING outbox_id=597 action=invoice_registered invoice=z2-1791137552309376834 attempts=1: audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt (a competing proposal holds the vote slots; they free on commit or after the vote TTL)
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 0] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 0 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 1] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 1 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 2] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 2 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 3] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 3 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[node 4] refused audit append at seq 0: already voted for a different entry at seq 0; awaiting its commit
+[quorum_client] node 4 rejected audit append: already voted for a different entry at seq 0; awaiting its commit
+[service] AUDIT PENDING outbox_id=597 action=invoice_registered invoice=z2-1791137552309376834 attempts=2: audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt (a competing proposal holds the vote slots; they free on commit or after the vote TTL)
+[PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change): split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+[FAIL] Z7a: while an audit is pending, /metrics shows it (pending >= 1, oldest age > 0) so an alert can fire: status=404 pending=None oldest_age_s=None
+[PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record: invoice_row_exists=true outbox_status=Ok(Some("pending"))
+[node 0] co-signed (pending) audit entry seq 0.
+[node 1] co-signed (pending) audit entry seq 0.
+[node 2] co-signed (pending) audit entry seq 0.
+[node 0] replicated audit entry seq 0 (3 valid co-signatures).
+[node 1] replicated audit entry seq 0 (3 valid co-signatures).
+[node 2] replicated audit entry seq 0 (3 valid co-signatures).
+[node 3] replicated audit entry seq 0 (3 valid co-signatures).
+[node 4] replicated audit entry seq 0 (3 valid co-signatures).
+[PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence): drained=true entries_for_invoice=1 chain_ok=true after=4240ms
+[node 0] co-signed (pending) audit entry seq 1.
+[node 1] co-signed (pending) audit entry seq 1.
+[node 2] co-signed (pending) audit entry seq 1.
+[node 0] replicated audit entry seq 1 (3 valid co-signatures).
+[node 1] replicated audit entry seq 1 (3 valid co-signatures).
+[node 2] replicated audit entry seq 1 (3 valid co-signatures).
+[node 3] replicated audit entry seq 1 (3 valid co-signatures).
+[node 4] replicated audit entry seq 1 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 2.
+[node 1] co-signed (pending) audit entry seq 2.
+[node 2] co-signed (pending) audit entry seq 2.
+[node 0] replicated audit entry seq 2 (3 valid co-signatures).
+[node 1] replicated audit entry seq 2 (3 valid co-signatures).
+[node 2] replicated audit entry seq 2 (3 valid co-signatures).
+[node 3] replicated audit entry seq 2 (3 valid co-signatures).
+[node 4] replicated audit entry seq 2 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 3.
+[node 1] co-signed (pending) audit entry seq 3.
+[node 2] co-signed (pending) audit entry seq 3.
+[node 0] replicated audit entry seq 3 (3 valid co-signatures).
+[node 1] replicated audit entry seq 3 (3 valid co-signatures).
+[node 2] replicated audit entry seq 3 (3 valid co-signatures).
+[node 3] replicated audit entry seq 3 (3 valid co-signatures).
+[node 4] replicated audit entry seq 3 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 4.
+[node 1] co-signed (pending) audit entry seq 4.
+[node 2] co-signed (pending) audit entry seq 4.
+[node 0] replicated audit entry seq 4 (3 valid co-signatures).
+[node 1] replicated audit entry seq 4 (3 valid co-signatures).
+[node 2] replicated audit entry seq 4 (3 valid co-signatures).
+[node 3] replicated audit entry seq 4 (3 valid co-signatures).
+[node 4] replicated audit entry seq 4 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 5.
+[node 1] co-signed (pending) audit entry seq 5.
+[node 2] co-signed (pending) audit entry seq 5.
+[node 0] replicated audit entry seq 5 (3 valid co-signatures).
+[node 1] replicated audit entry seq 5 (3 valid co-signatures).
+[node 2] replicated audit entry seq 5 (3 valid co-signatures).
+[node 3] replicated audit entry seq 5 (3 valid co-signatures).
+[node 4] replicated audit entry seq 5 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 6.
+[node 1] co-signed (pending) audit entry seq 6.
+[node 2] co-signed (pending) audit entry seq 6.
+[node 0] replicated audit entry seq 6 (3 valid co-signatures).
+[node 1] replicated audit entry seq 6 (3 valid co-signatures).
+[node 2] replicated audit entry seq 6 (3 valid co-signatures).
+[node 3] replicated audit entry seq 6 (3 valid co-signatures).
+[node 4] replicated audit entry seq 6 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 7.
+[node 1] co-signed (pending) audit entry seq 7.
+[node 2] co-signed (pending) audit entry seq 7.
+[node 0] replicated audit entry seq 7 (3 valid co-signatures).
+[node 1] replicated audit entry seq 7 (3 valid co-signatures).
+[node 2] replicated audit entry seq 7 (3 valid co-signatures).
+[node 3] replicated audit entry seq 7 (3 valid co-signatures).
+[node 4] replicated audit entry seq 7 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 8.
+[node 1] co-signed (pending) audit entry seq 8.
+[node 2] co-signed (pending) audit entry seq 8.
+[node 0] replicated audit entry seq 8 (3 valid co-signatures).
+[node 1] replicated audit entry seq 8 (3 valid co-signatures).
+[node 2] replicated audit entry seq 8 (3 valid co-signatures).
+[node 3] replicated audit entry seq 8 (3 valid co-signatures).
+[node 4] replicated audit entry seq 8 (3 valid co-signatures).
+[PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention): statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+[PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate): pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+[PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table): invoices_without_outbox_record=0
+[node 0] co-signed (pending) audit entry seq 9.
+[node 1] co-signed (pending) audit entry seq 9.
+[node 2] co-signed (pending) audit entry seq 9.
+[node 0] replicated audit entry seq 9 (3 valid co-signatures).
+[node 1] replicated audit entry seq 9 (3 valid co-signatures).
+[node 2] replicated audit entry seq 9 (3 valid co-signatures).
+[node 3] replicated audit entry seq 9 (3 valid co-signatures).
+[node 4] replicated audit entry seq 9 (3 valid co-signatures).
+[PASS] Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving: bad_status=400 body="{\"error\":\"ciphertext_b64: invalid base64: Invalid symbol 33, offset 0.\"}" next_valid_status=201
+[FAIL] Z7b: /metrics requires authentication (401 without a key) and the admin (403 for a non-admin key): no_key=404 issuer_key=404
+[FAIL] Z7c: /metrics gauges equal the database (done/invoices/failures), nothing pending after drain, age 0, and no secret appears in the output: done=None/568 pending=None invoices=None/565 failures=None/0 age=None leaks=false
+[node 0] co-signed (pending) audit entry seq 10.
+[node 1] co-signed (pending) audit entry seq 10.
+[node 2] co-signed (pending) audit entry seq 10.
+[node 0] replicated audit entry seq 10 (3 valid co-signatures).
+[node 1] replicated audit entry seq 10 (3 valid co-signatures).
+[node 2] replicated audit entry seq 10 (3 valid co-signatures).
+[node 3] replicated audit entry seq 10 (3 valid co-signatures).
+[node 4] replicated audit entry seq 10 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 11.
+[node 1] co-signed (pending) audit entry seq 11.
+[node 2] co-signed (pending) audit entry seq 11.
+[node 0] replicated audit entry seq 11 (3 valid co-signatures).
+[node 1] replicated audit entry seq 11 (3 valid co-signatures).
+[node 2] replicated audit entry seq 11 (3 valid co-signatures).
+[node 3] replicated audit entry seq 11 (3 valid co-signatures).
+[node 4] replicated audit entry seq 11 (3 valid co-signatures).
+[node 0] co-signed (pending) audit entry seq 12.
+[node 1] co-signed (pending) audit entry seq 12.
+[node 2] co-signed (pending) audit entry seq 12.
+[node 0] replicated audit entry seq 12 (3 valid co-signatures).
+[node 1] replicated audit entry seq 12 (3 valid co-signatures).
+[node 2] replicated audit entry seq 12 (3 valid co-signatures).
+[node 3] replicated audit entry seq 12 (3 valid co-signatures).
+[node 4] replicated audit entry seq 12 (3 valid co-signatures).
+[PASS] Z6: /healthz and /readyz answer 200 without credentials and expose no secret or DB detail: healthz=200 "ok" readyz=200 "ready" leak=false
+[node 0] co-signed (pending) audit entry seq 13.
+[node 1] co-signed (pending) audit entry seq 13.
+[node 2] co-signed (pending) audit entry seq 13.
+[node 0] replicated audit entry seq 13 (3 valid co-signatures).
+[node 1] replicated audit entry seq 13 (3 valid co-signatures).
+[node 2] replicated audit entry seq 13 (3 valid co-signatures).
+[node 3] replicated audit entry seq 13 (3 valid co-signatures).
+[node 4] replicated audit entry seq 13 (3 valid co-signatures).
+[PASS] Z5: 112 malformed/hostile JSON bodies across all 7 POST routes never cause a 5xx or dropped connection, and the service still serves afterwards: requests=112 bad=[] next_valid_status=201
+
+=== Phase 4 Adversarial Test Summary ===
+  [PASS] Z2a: audit append fails -> explicit 202 'committed, audit pending' (never a bare 500 after a committed change) -- split_votes=5/5 http=202 body={"audit":"pending","detail":"audit contention: gave up after 8 attempts; best attempt collected 0 co-signature(s), need 3; 5 node refusal(s) in the last attempt
+  [FAIL] Z7a: while an audit is pending, /metrics shows it (pending >= 1, oldest age > 0) so an alert can fire -- status=404 pending=None oldest_age_s=None
+  [PASS] Z2b: F-14 atomicity: the state change is NEVER present without a durable pending-audit (outbox) record -- invoice_row_exists=true outbox_status=Ok(Some("pending"))
+  [PASS] Z2c: the pending audit is committed automatically once progress is possible, exactly once, chain valid (no lost evidence) -- drained=true entries_for_invoice=1 chain_ok=true after=4240ms
+  [PASS] Z1a: 8 concurrent registrations through the live service all succeed with 201 (no caller starved by audit contention) -- statuses=[201, 201, 201, 201, 201, 201, 201, 201]
+  [PASS] Z1b: every one of the 8 is audited exactly once and nothing is left pending (no lost write, no duplicate) -- pending_left=0 per_invoice_counts=[1, 1, 1, 1, 1, 1, 1, 1]
+  [PASS] Z3: no invoice from this run exists without an outbox/audit record (F-14 invariant over the whole table) -- invoices_without_outbox_record=0
+  [PASS] Z4: invalid base64 in ciphertext_b64 is a clean 400 (not a panicked handler) and the service keeps serving -- bad_status=400 body="{\"error\":\"ciphertext_b64: invalid base64: Invalid symbol 33, offset 0.\"}" next_valid_status=201
+  [FAIL] Z7b: /metrics requires authentication (401 without a key) and the admin (403 for a non-admin key) -- no_key=404 issuer_key=404
+  [FAIL] Z7c: /metrics gauges equal the database (done/invoices/failures), nothing pending after drain, age 0, and no secret appears in the output -- done=None/568 pending=None invoices=None/565 failures=None/0 age=None leaks=false
+  [PASS] Z6: /healthz and /readyz answer 200 without credentials and expose no secret or DB detail -- healthz=200 "ok" readyz=200 "ready" leak=false
+  [PASS] Z5: 112 malformed/hostile JSON bodies across all 7 POST routes never cause a 5xx or dropped connection, and the service still serves afterwards -- requests=112 bad=[] next_valid_status=201
+9/12 checks passed as expected.

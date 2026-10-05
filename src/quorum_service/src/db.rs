@@ -602,3 +602,115 @@ pub async fn record_audit_failure(
         .await?;
     Ok(())
 }
+
+/// Database-derived operational numbers for `/metrics` (Gap 11).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MetricsSnapshot {
+    pub outbox_pending: i64,
+    pub outbox_inflight: i64,
+    pub outbox_done: i64,
+    /// `created_at_ms` of the oldest outbox row that is not `done`.
+    pub oldest_unfinished_created_ms: Option<i64>,
+    pub invoices: i64,
+    pub audit_failures: i64,
+}
+
+pub async fn metrics_snapshot(client: &Client) -> Result<MetricsSnapshot, tokio_postgres::Error> {
+    let mut snap = MetricsSnapshot::default();
+    for row in client
+        .query(
+            "SELECT status, count(*) FROM audit_outbox GROUP BY status",
+            &[],
+        )
+        .await?
+    {
+        let status: String = row.get(0);
+        let n: i64 = row.get(1);
+        match status.as_str() {
+            "pending" => snap.outbox_pending = n,
+            "inflight" => snap.outbox_inflight = n,
+            "done" => snap.outbox_done = n,
+            _ => {}
+        }
+    }
+    snap.oldest_unfinished_created_ms = client
+        .query_one(
+            "SELECT min(created_at_ms) FROM audit_outbox WHERE status <> 'done'",
+            &[],
+        )
+        .await?
+        .get(0);
+    snap.invoices = client
+        .query_one("SELECT count(*) FROM invoices", &[])
+        .await?
+        .get(0);
+    snap.audit_failures = client
+        .query_one("SELECT count(*) FROM audit_failures", &[])
+        .await?
+        .get(0);
+    Ok(snap)
+}
+
+/// Prometheus text exposition (v0.0.4). Pure, so it is unit-tested.
+pub fn render_metrics(snap: &MetricsSnapshot, now_ms: i64) -> String {
+    let age_s = snap
+        .oldest_unfinished_created_ms
+        .map(|c| (now_ms - c).max(0) as f64 / 1000.0)
+        .unwrap_or(0.0);
+    format!(
+        "# HELP ciphersettle_audit_outbox_rows Audit outbox rows by status.\n\
+# TYPE ciphersettle_audit_outbox_rows gauge\n\
+ciphersettle_audit_outbox_rows{{status=\"pending\"}} {}\n\
+ciphersettle_audit_outbox_rows{{status=\"inflight\"}} {}\n\
+ciphersettle_audit_outbox_rows{{status=\"done\"}} {}\n\
+# HELP ciphersettle_audit_outbox_oldest_unfinished_age_seconds Age of the oldest audit obligation not yet delivered (0 if none). Alert when this stays high.\n\
+# TYPE ciphersettle_audit_outbox_oldest_unfinished_age_seconds gauge\n\
+ciphersettle_audit_outbox_oldest_unfinished_age_seconds {}\n\
+# HELP ciphersettle_invoices_total Registered invoices.\n\
+# TYPE ciphersettle_invoices_total gauge\n\
+ciphersettle_invoices_total {}\n\
+# HELP ciphersettle_audit_failures_total Derive-key requests denied because the audit append failed (fail-closed).\n\
+# TYPE ciphersettle_audit_failures_total gauge\n\
+ciphersettle_audit_failures_total {}\n",
+        snap.outbox_pending, snap.outbox_inflight, snap.outbox_done, age_s, snap.invoices, snap.audit_failures
+    )
+}
+
+#[cfg(test)]
+mod metrics_tests {
+    use super::*;
+
+    #[test]
+    fn renders_every_series_with_exact_values() {
+        let snap = MetricsSnapshot {
+            outbox_pending: 3,
+            outbox_inflight: 1,
+            outbox_done: 40,
+            oldest_unfinished_created_ms: Some(10_000),
+            invoices: 44,
+            audit_failures: 2,
+        };
+        let t = render_metrics(&snap, 12_500);
+        for want in [
+            "ciphersettle_audit_outbox_rows{status=\"pending\"} 3\n",
+            "ciphersettle_audit_outbox_rows{status=\"inflight\"} 1\n",
+            "ciphersettle_audit_outbox_rows{status=\"done\"} 40\n",
+            "ciphersettle_audit_outbox_oldest_unfinished_age_seconds 2.5\n",
+            "ciphersettle_invoices_total 44\n",
+            "ciphersettle_audit_failures_total 2\n",
+        ] {
+            assert!(t.contains(want), "missing {want:?} in {t}");
+        }
+    }
+
+    #[test]
+    fn nothing_unfinished_means_age_zero_and_a_future_row_is_not_negative() {
+        let none = MetricsSnapshot::default();
+        assert!(render_metrics(&none, 5).contains("oldest_unfinished_age_seconds 0\n"));
+        let skew = MetricsSnapshot {
+            oldest_unfinished_created_ms: Some(9_000),
+            ..Default::default()
+        };
+        assert!(render_metrics(&skew, 1_000).contains("oldest_unfinished_age_seconds 0\n"));
+    }
+}

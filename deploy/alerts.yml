@@ -1,0 +1,27 @@
+# Prometheus alert rules for quorum_service (Gap 11 slice). STATUS: YAML-parsed only;
+# NOT validated with promtool and never fired in a real Prometheus -> UNVERIFIED.
+# Scrape /metrics with the ADMIN API key as a bearer token.
+groups:
+  - name: ciphersettle-audit
+    rules:
+      - alert: AuditBacklogStuck
+        # An audit obligation (committed state change, audit not yet in the quorum log)
+        # has been waiting > 2 minutes. Normal drain is seconds (vote TTL is 5 s).
+        expr: ciphersettle_audit_outbox_oldest_unfinished_age_seconds > 120
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "Audit evidence backlog is not draining"
+          runbook: "docs/RUNBOOK_audit_backlog.md"
+      - alert: AuditFailuresRising
+        # Derive-key requests are being denied (fail-closed) because the audit append failed.
+        expr: increase(ciphersettle_audit_failures_total[10m]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: "Key derivations are being denied because the audit quorum is unavailable"
+          runbook: "docs/RUNBOOK_audit_backlog.md"
+      - alert: ServiceMetricsDown
+        expr: up{job="quorum_service"} == 0
+        for: 2m
+        labels: {severity: page}
+        annotations: {summary: "quorum_service is not scrapeable (down, or admin key rejected)"}
