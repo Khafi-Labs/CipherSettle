@@ -147,6 +147,10 @@ struct AppState {
     /// F-13: serializes audit appends so this process is a single proposer
     /// (never held together with a DB connection or transaction).
     audit_lock: tokio::sync::Mutex<()>,
+    /// Gap 11: last `/readyz` quorum-reachability result and when it was taken,
+    /// so an unauthenticated endpoint cannot be used to make this service open
+    /// a TLS connection to every node on every request.
+    ready_cache: tokio::sync::Mutex<Option<(std::time::Instant, bool)>>,
 }
 
 fn now_ms() -> u64 {
@@ -490,15 +494,64 @@ async fn healthz() -> &'static str {
 /// Gap 11: readiness. 200 only if a database connection can be checked out and
 /// answers a trivial query; otherwise 503 with a fixed, non-sensitive body
 /// (the underlying error is deliberately not echoed).
+/// How long a quorum-reachability result is reused by `/readyz`.
+const READY_CACHE_TTL: Duration = Duration::from_secs(1);
+
+/// True when at least `threshold + 1` quorum nodes answer a cheap, filtered
+/// read over the pinned mTLS channel. This proves reachability and a protocol
+/// response, NOT that a node holds a share or is `Ready` (a node still in DKG
+/// also answers); it is the strongest cheap signal the node protocol offers.
+async fn quorum_reachable(state: &AppState) -> bool {
+    let needed = state.threshold + 1;
+    let mut probes = tokio::task::JoinSet::new();
+    for (_, addr) in state.quorum_nodes.iter() {
+        let addr = addr.clone();
+        let connector = state.connector.clone();
+        probes.spawn(async move {
+            matches!(
+                quorum_client::send_request_with_timeout(
+                    &connector,
+                    &addr,
+                    &quorum_core::Message::GetAuditLog {
+                        invoice_id: Some("__readyz_probe__".to_string()),
+                    },
+                    Duration::from_secs(1),
+                )
+                .await,
+                Some(quorum_core::Message::AuditLogEntries { .. })
+            )
+        });
+    }
+    let mut up = 0usize;
+    while let Some(r) = probes.join_next().await {
+        if matches!(r, Ok(true)) {
+            up += 1;
+        }
+    }
+    up >= needed
+}
+
 async fn readyz(State(state): State<Arc<AppState>>) -> (StatusCode, &'static str) {
-    let ready = match state.db.get().await {
+    let db_ok = match state.db.get().await {
         Ok(client) => client.simple_query("SELECT 1").await.is_ok(),
         Err(_) => false,
     };
-    if ready {
+    if !db_ok {
+        return (StatusCode::SERVICE_UNAVAILABLE, "database unavailable");
+    }
+    let mut cache = state.ready_cache.lock().await;
+    let quorum_ok = match *cache {
+        Some((at, ok)) if at.elapsed() < READY_CACHE_TTL => ok,
+        _ => {
+            let ok = quorum_reachable(&state).await;
+            *cache = Some((std::time::Instant::now(), ok));
+            ok
+        }
+    };
+    if quorum_ok {
         (StatusCode::OK, "ready")
     } else {
-        (StatusCode::SERVICE_UNAVAILABLE, "database unavailable")
+        (StatusCode::SERVICE_UNAVAILABLE, "quorum unavailable")
     }
 }
 
@@ -1332,6 +1385,7 @@ async fn main() {
         },
         merkle_log: tokio::sync::Mutex::new(merkle_log),
         audit_lock: tokio::sync::Mutex::new(()),
+        ready_cache: tokio::sync::Mutex::new(None),
     });
     tokio::spawn(audit_outbox_drainer(state.clone()));
 

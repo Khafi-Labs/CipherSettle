@@ -1472,6 +1472,36 @@ async fn test_z_service_audit_semantics(report: &mut Report) {
         format!("requests={sweep_n} bad={sweep_bad:?} next_valid_status={st_after}"),
     );
 
+    // ---- Z8 (Gap 11): /readyz reflects quorum reachability (needs t+1 = 3 of 5 nodes).
+    // The result is cached ~1 s inside the service, so wait past it after each change.
+    let readyz = || async {
+        tokio::time::sleep(Duration::from_millis(1600)).await;
+        http_json(&service_addr, "GET", "/readyz", None, None).await
+    };
+    let (r_all, _) = readyz().await;
+    for i in [3usize, 4] {
+        let _ = q.children[i].kill();
+        let _ = q.children[i].wait();
+    }
+    let (r_three, _) = readyz().await;
+    report.record(
+        "Z8a: /readyz stays 200 while exactly t+1 = 3 of 5 nodes are reachable",
+        r_all == 200 && r_three == 200,
+        format!("all_up={r_all} three_up={r_three}"),
+    );
+    let _ = q.children[2].kill();
+    let _ = q.children[2].wait();
+    let (r_two, body_two) = readyz().await;
+    let (h_two, _) = http_json(&service_addr, "GET", "/healthz", None, None).await;
+    let leak2 = ["127.0.0.1", "98", "node", "postgres", "password"]
+        .iter()
+        .any(|w| body_two.contains(w));
+    report.record(
+        "Z8b: /readyz turns 503 when fewer than 3 nodes are reachable (the service cannot release keys), /healthz stays 200, and the body names no node or address",
+        r_two == 503 && h_two == 200 && !leak2,
+        format!("two_up_readyz={r_two} body={body_two:?} healthz={h_two} leak={leak2}"),
+    );
+
     let _ = service_child.kill();
     let _ = service_child.wait();
     kill_all(&mut q.children);
