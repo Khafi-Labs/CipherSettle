@@ -60,7 +60,7 @@ Reading order for understanding the cryptography: `quorum_poc` → `quorum_core`
 
 Everything below assumes **rustc/cargo 1.97**, which `rust-toolchain.toml` pins declaratively (`channel = "1.97"`, tracking 1.97.x). The sandbox-era exact-version pins (`zeroize`, `postgres-protocol`, `base64ct`) were lifted in Gap 7; the remaining exact pins, if any, are checked by `ci/check_pin_policy.sh`, which requires an explanatory comment above each.
 
-Continuous integration runs on every push and pull request: `.github/workflows/ci.yml` builds, lints (`clippy -D warnings`), and tests the workspace against the pinned toolchain and a real Postgres 16 service container, and enforces that any exact-version pin carries an explanatory comment. `.github/workflows/security.yml` runs `cargo audit`, `cargo deny` against `deny.toml`, and emits a CycloneDX SBOM on release tags.
+Continuous integration runs on every push and pull request: `.github/workflows/ci.yml` builds, lints (`clippy -D warnings`), and tests the workspace against the pinned toolchain and a real Postgres 16 service container, and enforces that any exact-version pin carries an explanatory comment. The `supply-chain` job in the same file runs `cargo audit` (ignore list derived from `deny.toml` by `ci/audit_ignores.sh`) and `cargo deny` on every push and daily on a schedule. No SBOM is generated yet. `.github/workflows/fuzz.yml` runs the coverage-guided fuzz targets (never yet run on GitHub). None of these workflows has run on GitHub yet; see `docs/PRODUCTION_READINESS.md` for what has been executed locally.
 
 **Phase 0 — see the core protocol work, no setup needed:**
 ```bash
@@ -164,7 +164,7 @@ Every phase document contains a detailed status of its components. The current o
 ## Layout
 
 ```
-.github/workflows/       ci.yml (build/clippy/test) and security.yml (audit/deny/SBOM)
+.github/workflows/       ci.yml (lint, test, adversarial, supply-chain, container-image), fuzz.yml, flake-hunt.yml
 ci/                      check_pin_policy.sh -- fails the build on undocumented version pins
 docs/
   ARCHITECTURE.md

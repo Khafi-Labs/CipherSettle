@@ -24,6 +24,9 @@ step() {
 step toolchain_pinned       bash ci/assert_toolchain_pinned.sh
 step dep_pin_policy         bash ci/check_pin_policy.sh
 step fuzz_setup_consistency bash ci/check_fuzz_setup.sh
+step docs_claims            bash ci/check_docs_claims.sh
+step docs_claims_selftest   bash ci/check_docs_claims_selftest.sh
+step dockerfile_policy      bash ci/check_dockerfile.sh
 step fuzz_gate_selftest     bash ci/check_fuzz_assert.sh
 step fmt                    cargo fmt --all -- --check
 step clippy                 cargo clippy --workspace --locked --all-targets -- -D warnings

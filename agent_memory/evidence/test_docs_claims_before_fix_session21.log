@@ -1,0 +1,9 @@
+FAIL: C1 duplicate readiness row ids: | 1.14 | 1.16 | 1.17 
+FAIL: C2 PHASE1_README.md references missing path: src/tls.rs
+FAIL: C2 README.md references missing path: .github/workflows/security.yml
+FAIL: C2 VERIFICATION_RUNBOOK.md references missing path: agent_memory/evidence/gap6_gap8_prep_session15/summary.txt
+FAIL: C2 docs/PRODUCTION_READINESS.md references missing path: .github/workflows/security.yml
+FAIL: C2 docs/security/THREAT_MODEL.md references missing path: .github/workflows/security.yml
+FAIL: C3 VERIFICATION_RUNBOOK.md mentions Rust 1.91.1 but the pin is 1.97
+FAIL: C3 docs/ARCHITECTURE.md mentions Rust 1.78 but the pin is 1.97
+FAIL: C4 docs/PRODUCTION_READINESS.md claims 41 adversarial checks but CI asserts 80

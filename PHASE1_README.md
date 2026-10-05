@@ -14,7 +14,7 @@ Implements the Phase 1 exit criteria of the project's original phased roadmap (t
   `config` module. Zero networking, zero product logic — same design
   principle as `ciphersettle_core`, applied to the crypto core.
 - **`quorum_node`** — the actual standalone, independently-testable node
-  binary. Owns mTLS (certificate-pinned, no CA — see `src/tls.rs`),
+  binary. Owns mTLS (certificate-pinned, no CA — see `src/quorum_node/src/tls.rs`),
   drives a `quorum_core::DkgSession` from real network messages, and
   serves derive requests once finalized. `cargo run -p quorum_node --
   <config.json>`.

@@ -39,7 +39,7 @@ Malicious node, malicious/compromised `quorum_service`, malicious client, networ
 | T-9 | Malformed/oversized input, parser DoS, network-reachable panics | Mitigated / Open | Line-length bounding exists (`bounded_line_reader.rs`); **fuzzing is not complete** |
 | T-10 | Below-threshold / threshold compromise beyond PoC | Open | Requires formal analysis |
 | T-11 | Vetseal design | **Open** | ElGamal over G2 has no AEAD, and is malleable by design (required for homomorphic combine — see CRYPTO-008). The NIZK is now implemented and wired into `DerivePartial`, but has not been reviewed by a human cryptographer. |
-| T-12 | Supply chain (dependencies, secrets) | Partially mitigated | `cargo audit`, `cargo deny`, and SBOM generation run in CI (`.github/workflows/security.yml`). **Seven advisories remain knowingly accepted** with documented justifications in `deny.toml`; secrets are not yet KMS-backed (finding A2). |
+| T-12 | Supply chain (dependencies, secrets) | Partially mitigated | `cargo audit` and `cargo deny` run in the `supply-chain` job of `.github/workflows/ci.yml` (never yet run on GitHub; executed locally). **Three advisories remain knowingly accepted** (all `rustls-webpki 0.101.7`) with documented justifications in `deny.toml`. No SBOM is generated. Secrets can now be supplied from permission-checked files (Gap 9 slice) but are not KMS-backed and cannot be rotated online (finding A2). |
 
 ## The load-bearing architectural gap
 

@@ -12,7 +12,7 @@ sections say exactly which parts were executed locally and which were not.
    the evidence attached. Green CI on its own closes nothing if the condition
    asks for more (20 consecutive runs, a one-hour fuzz run per target, ...).
 2. **Only the pinned compiler counts.** `rust-toolchain.toml` pins `1.97`. A run
-   on any other rustc (the authoring sandbox only had 1.91.1) is not evidence
+   on any other rustc (earlier authoring sessions only had 1.91.1; session 17 onward ran 1.97) is not evidence
    about the pinned build. `ci/assert_toolchain_pinned.sh` makes the mismatch a
    hard failure, and every CI job runs it.
 3. **Status vocabulary** (use exactly these words in notes and PRs):
@@ -167,7 +167,7 @@ Local drill: `bash ci/check_ci_fails_on_broken_db.sh` must print
 branch change `POSTGRES_PASSWORD` in the `test` job's service to a wrong value;
 the `test` job must go red. Delete the branch.
 
-Status: the script and the local drill are EXECUTED + PASSED (sandbox, Rust 1.91.1).
+Status: the script and the local drill are EXECUTED + PASSED (authoring sandbox; first run on the pinned 1.97 in session 17 onward).
 The GitHub run is NOT EXECUTED.
 
 ## 6. Power-loss testing (Gap 13)
@@ -302,5 +302,5 @@ status to CLOSED "pending" anything.
 
 ## 10. Authoring-sandbox evidence for this runbook
 
-See `agent_memory/evidence/gap6_gap8_prep_session15/summary.txt` for the exact
+See `agent_memory/evidence/verification_prep_session15_summary.txt` and, for the pinned-toolchain run, `agent_memory/evidence/verification_session17_pin197_summary.txt` for the exact
 per-check status (EXECUTED + PASSED / FAILED, NOT EXECUTED, BLOCKED BY ENVIRONMENT).
