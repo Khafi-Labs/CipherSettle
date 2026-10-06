@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Proves ci/check_docs_claims.sh can FAIL: builds a tiny broken repo and requires
-# every check class (C1..C5) to fire, and a clean repo to pass.
+# every check class (C1..C10) to fire, and a clean repo to pass.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
@@ -20,10 +20,17 @@ printf "GET /known\n" >> "$T/README.md"
 printf '| 1.1 | a |\n| 1.1 | dup |\n' > "$T/docs/PRODUCTION_READINESS.md"
 printf 'let app = Router::new().route("/known", get(h)).route("/secret-undocumented", post(h));\n' > "$T/src/quorum_service/src/main.rs"
 printf '# bad\nSee `src/missing.rs`. Rust 1.75 is required. 41/41 checks pass. Set TEST_DATABASE_URL. Seven advisories are knowingly accepted. Run cargo build -p not_a_crate. GET /ghost-route is documented. See T-1…T-9 and CRYPTO-001…CRYPTO-009.\n' > "$T/README.md"
+# C10 fixture: a real two-crate cargo workspace whose ARCHITECTURE deps block is wrong.
+mkdir -p "$T/crates/a/src" "$T/crates/b/src"
+printf '[workspace]\nmembers=["crates/a","crates/b"]\nresolver="2"\n' > "$T/Cargo.toml"
+printf '[package]\nname="a"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nb={path="../b"}\n' > "$T/crates/a/Cargo.toml"
+printf '[package]\nname="b"\nversion="0.1.0"\nedition="2021"\n' > "$T/crates/b/Cargo.toml"
+: > "$T/crates/a/src/lib.rs"; : > "$T/crates/b/src/lib.rs"
+printf '# arch\n```deps\na:\nb:\n```\n' > "$T/docs/ARCHITECTURE.md"
 out=$( cd "$T" && bash ci/check_docs_claims.sh 2>&1 ); rc=$?
 fail=0
 [ $rc -ne 0 ] && echo "  ok:   broken mini-repo is rejected (rc=$rc)" || { echo "  FAIL: broken repo passed"; fail=1; }
-for c in C1 C2 C3 C4 C5 C6 C7 C8 C9; do
+for c in C1 C2 C3 C4 C5 C6 C7 C8 C9 C10; do
   grep -q "FAIL: $c" <<<"$out" && echo "  ok:   $c fired" || { echo "  FAIL: $c did not fire"; fail=1; }
 done
 exit $fail

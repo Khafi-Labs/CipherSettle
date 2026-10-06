@@ -8,6 +8,7 @@
 #   C6 'N (known) advisories accepted' equals the number of ignores in deny.toml
 #   C8 every HTTP route registered by quorum_service is documented, and every documented route exists
 #   C9 every `cargo ... -p <name>` in docs, scripts and workflows names a package that exists
+#   C10 the ```deps block in docs/ARCHITECTURE.md equals the workspace's real internal dependencies (cargo metadata)
 #   C7 documented id ranges (T-1…T-N, CRYPTO-001…N) match the documents that define them
 # "Maintained docs" = root *.md (except the dated roadmap/review), docs/**, deploy/**.
 # Historical notes (agent_memory/**, SECURITY_REVIEW.md, the roadmap) are dated records and are NOT checked.
@@ -78,4 +79,21 @@ rm -f "${TMPDIR:-/tmp}/routes_code.$$" "${TMPDIR:-/tmp}/routes_docs.$$"
 while read -r f n; do
   [ -d "src/$n" ] || fail "C9 $f uses 'cargo -p $n' but there is no such package under src/"
 done < <(grep -rHoE '(^|[ "])(-p|--package)[ =][a-z_0-9-]+' "${DOCS[@]}" ci .github Dockerfile --exclude=check_docs_claims.sh --exclude=check_docs_claims_selftest.sh 2>/dev/null | sed -E 's/^([^:]+):.*(-p|--package)[ =]([a-z_0-9-]+)$/\1 \3/' | sort -u)
+# C10
+if [ -f Cargo.toml ] && [ -f docs/ARCHITECTURE.md ]; then
+  actual=$(cargo metadata --no-deps --offline --format-version 1 2>/dev/null | python3 -c "
+import json,sys
+m=json.load(sys.stdin); names={p['name'] for p in m['packages']}
+for p in sorted(m['packages'],key=lambda p:p['name']):
+    deps=sorted(d['name'] for d in p['dependencies'] if d['name'] in names and d['kind'] in (None,'normal'))
+    print(p['name']+': '+', '.join(deps))
+" 2>/dev/null)
+  documented=$(awk '/^```deps$/{f=1;next} /^```$/{f=0} f' docs/ARCHITECTURE.md | sed '/^$/d' | sort)
+  if [ -z "$actual" ]; then fail "C10 could not read the workspace with cargo metadata"
+  elif [ -z "$documented" ]; then fail "C10 docs/ARCHITECTURE.md has no \`\`\`deps block"
+  else
+    diff <(echo "$actual" | sed 's/: $/:/' | sort) <(echo "$documented" | sed 's/: $/:/') >/dev/null \
+      || { fail "C10 ARCHITECTURE deps block differs from cargo metadata:"; diff <(echo "$actual" | sed 's/: $/:/' | sort) <(echo "$documented" | sed 's/: $/:/') | sed 's/^/        /'; }
+  fi
+fi
 [ $bad -eq 0 ] && echo "docs claims: ok (${#DOCS[@]} maintained docs)"; exit $bad

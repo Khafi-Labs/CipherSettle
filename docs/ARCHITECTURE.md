@@ -44,47 +44,35 @@ CipherSettle is a Rust Cargo workspace of 11 members implementing an off-chain, 
 
 ## Crate Dependency Map
 
-```
-ciphersettle_core   -> (no workspace deps; dependency-free by design)
+Workspace-internal, non-dev dependencies. This block is compared against `cargo metadata` by `ci/check_docs_claims.sh` (C10), so it cannot drift silently. (`quorum_vetseal` has `quorum_core` as a dev-dependency only.) Process-level relationships are not dependencies: `quorum_orchestrator` and `quorum_adversarial` additionally SPAWN `quorum_node`, `quorum_notary` and `quorum_service` as real OS processes.
 
-quorum_poc          -> quorum_core
-
-quorum_audit         -> (no workspace deps)
-
-quorum_vetseal       -> (no workspace deps; blstrs directly; quorum_core is a dev-dependency only)
-
-quorum_core          -> quorum_audit, quorum_vetseal
-
-quorum_node          -> quorum_core, quorum_audit, quorum_vetseal
-
-quorum_notary        -> (own crate, ed25519 identity)
-
-quorum_client        -> quorum_core, quorum_audit, quorum_vetseal
-
-quorum_orchestrator  -> (drives quorum_node/quorum_notary/quorum_service as
-                          external processes + uses quorum_client)
-
-quorum_service       -> ciphersettle_core, quorum_core, quorum_audit,
-                          quorum_client, quorum_vetseal
-
-quorum_adversarial   -> (spins up quorum_node/quorum_service as real
-                          processes; uses quorum_client, quorum_vetseal,
-                          blstrs via quorum_core / quorum_vetseal)
+```deps
+ciphersettle_core:
+quorum_adversarial: ciphersettle_core, quorum_audit, quorum_client, quorum_core, quorum_vetseal
+quorum_audit:
+quorum_client: quorum_audit, quorum_core, quorum_vetseal
+quorum_core: quorum_audit, quorum_vetseal
+quorum_node: quorum_audit, quorum_core, quorum_vetseal
+quorum_notary: quorum_audit, quorum_core
+quorum_orchestrator: ciphersettle_core, quorum_audit, quorum_client, quorum_core, quorum_vetseal
+quorum_poc: quorum_core
+quorum_service: ciphersettle_core, quorum_audit, quorum_client, quorum_core, quorum_vetseal
+quorum_vetseal:
 ```
 
-**Key Architectural Detail:** `quorum_vetseal` is a dependency of `quorum_core`, `quorum_node`, `quorum_client`, and `quorum_service` — i.e., it sits *underneath* the core protocol crate, not bolted on afterward. This is required because sealing is wired into the real `DeriveRequest` flow.
+**Key Architectural Detail:** `quorum_vetseal` is a dependency of `quorum_core`, `quorum_node`, `quorum_client`, `quorum_service` (and the orchestrator and adversarial harness) — i.e., it sits *underneath* the core protocol crate, not bolted on afterward. This is required because sealing is wired into the real `DeriveRequest` flow.
 
 ## Crate Responsibilities
 
 - **`ciphersettle_core`** — dependency-free decision logic: access control (`resolve_access`), rate limiting (`check_rate_limit`), payload-size checks (`check_payload_size`), nullifier/idempotency (`check_nullifier`), audit-action naming (`audit_action_for`), the invoice commitment scheme (`commitment` module), and an append-only Merkle Mountain Range log (`merkle` module, publicly re-exported from `lib.rs` as `MerkleLog`/`MerkleProof`/`Side`/`MERKLE_VERSION`). Zero networking, zero IC dependency.
 - **`quorum_poc`** — Phase 0, single-process, in-memory DKG + derive simulation. No networking. Superseded by Phase 1.
-- **`quorum_core`** — transport-agnostic DKG (Feldman VSS with `Complaint` on bad shares) + Boneh-Franklin threshold BLS derive + the `Message` wire enum + `config` module + the HMAC-based derive-authorization functions (`sign_derive_auth`/`verify_derive_auth`/`build_derive_request`) and the `quorum_vetseal` type wiring in `Message::DeriveRequest`/`DerivePartial`. Zero networking, zero product logic.
-- **`quorum_node`** — the standalone node binary. Owns mTLS (cert-pinned, no CA), drives a `quorum_core::DkgSession`, serves derive requests, persists an audit log replica, handles audit wire messages. Contains `bounded_line_reader` and `handle_message`'s `DeriveRequest` arm, which performs: authorization window check → HMAC MAC verification (`verify_derive_auth`) → single-use nonce check → restart guard → sign partial → `debug_assert!` self-verify → seal + prove (`seal_partial_with_proof`) → respond with `Message::DerivePartial { sealed_share, proof, .. }`.
+- **`quorum_core`** — transport-agnostic DKG (Feldman VSS with `Complaint` on bad shares) + Boneh-Franklin threshold BLS derive + the `Message` wire enum + `config` module + the HMAC-based derive-authorization functions (`sign_derive_auth`/`verify_derive_auth`/`build_derive_request`), the per-node key derivation (`derive_node_auth_key`, HKDF-SHA256 from a master secret), and `secret_files` (secrets loaded from permission-checked files) and the `quorum_vetseal` type wiring in `Message::DeriveRequest`/`DerivePartial`. Zero networking, zero product logic.
+- **`quorum_node`** — the standalone node binary. Owns mTLS (cert-pinned, no CA), drives a `quorum_core::DkgSession`, serves derive requests, persists an audit log replica (`audit_store`: atomic, fsynced writes; a damaged log is fatal at start), persists its key share envelope-encrypted (`share_store`, pilot tier), acknowledges an audit entry only after it is durable (`AuditEntryCommitted`), handles audit wire messages. Contains `bounded_line_reader` and `handle_message`'s `DeriveRequest` arm, which performs: authorization window check → HMAC MAC verification (`verify_derive_auth`, against the node's OWN derived key) → single-use nonce check → restart guard → sign partial → self-verify (a `debug_assert!`, so DEBUG BUILDS ONLY; release builds rely on the client-side proof check, finding F-22) → seal + prove (`seal_partial_with_proof`) → respond with `Message::DerivePartial { sealed_share, proof, .. }`.
 - **`quorum_orchestrator`** — spawns real `quorum_node` OS processes, drives DKG, simulates a 2-of-5 outage, brokers a derive + round-trip decrypt, drives the Phase 2 audit-log tamper/reconciliation demo, and (Phase 3) exercises the live `quorum_service` REST surface end to end.
 - **`quorum_audit`** — hash-chained, multi-signed audit log. `AuditLog::try_append` refuses non-tip-extending appends; `AuditLog::diverges_from` / `majority_reference` do reconciliation; `NotarizationReceipt` is the external-anchor shape.
-- **`quorum_notary`** — standalone binary, independent identity, stamps and signs root-hash receipts on a schedule.
-- **`quorum_client`** — shared mTLS client logic used by both `quorum_orchestrator` and `quorum_service`: `build_connector`/`send_request`/`send_fire_and_forget`, `collect_sealed_derived_key` + `open_sealed_derived_key` (the split demanded by vetseal sealing), `propose_and_cosign_and_replicate`, `fetch_majority_tip`.
-- **`quorum_service`** — the product REST API. Postgres-backed via `deadpool-postgres`. Calls `ciphersettle_core`'s decision functions unchanged. `derive_invoice_key`'s handler requires a caller-supplied `transport_public_key_b64`, brokers a sealed derive via `quorum_client`, and returns only `sealed_derived_key_b64` + `used_node_ids` — it never holds a `TransportSecretKey`. TLS-terminates its own HTTP listener, refusing plaintext off-loopback.
+- **`quorum_notary`** — standalone binary, independent identity, signs and stores a receipt for each root hash a client submits (`NotarizeRequest`). It does not schedule anything itself: the orchestrator or another client decides when to ask.
+- **`quorum_client`** — shared mTLS client logic used by both `quorum_orchestrator` and `quorum_service`: `build_connector`/`send_request`/`send_fire_and_forget`, `collect_sealed_derived_key` + `open_sealed_derived_key` (the split demanded by vetseal sealing), `propose_audit_entry` (typed `ProposeError`; waits for t+1 durable acknowledgements; `propose_and_cosign_and_replicate` is its string-error wrapper), `fetch_majority_tip`.
+- **`quorum_service`** — the product REST API. Postgres-backed via `deadpool-postgres`. Calls `ciphersettle_core`'s decision functions unchanged. `derive_invoice_key`'s handler requires a caller-supplied `transport_public_key_b64`, brokers a sealed derive via `quorum_client`, and returns only `sealed_derived_key_b64` + `used_node_ids` — it never holds a `TransportSecretKey`. TLS-terminates its own HTTP listener, refusing plaintext off-loopback. Also: versioned schema migrations (`migrations.rs`, `quorum_service migrate`), a transactional audit outbox with a background drainer (F-14), and the operational endpoints `/healthz`, `/readyz` (quorum reachability) and `/metrics` (admin-only).
 - **`quorum_adversarial`** — a binary that spins up real quorums and attacks them: **80 checks in the default run across its groups (A–G, I–N, P, Q, R, S, T, W, Z; group H adds 2 and needs root)** covering (among others) malicious partials (A), below-threshold combine (B), node-level authorization bypass (C), replay (D), concurrent audit races (E), majority-tip reconciliation (I), mTLS penetration (F), HTTP penetration (G), sealed-share retry (J), TLS termination (K), restart-replay (L), the NIZK gate (M), the cutover guard (N), and a real `iptables` network partition (H).
 - **`quorum_vetseal`** — ElGamal-over-G2 sealing of BLS shares/signatures under a caller-generated transport public key, on `blstrs` directly (raw 96-byte G2 points; no dependency on `quorum_core` types).
 
@@ -94,7 +82,7 @@ Real OS processes in a full end-to-end run: 5× `quorum_node`, 1× `quorum_notar
 
 ## Data Flow
 
-`register_invoice` → Postgres row + nullifier check (`ciphersettle_core::check_nullifier`) → `grant_settlement_access` → `derive_invoice_key` (caller supplies a transport public key; service brokers a k-of-n sealed derive against the live quorum via `quorum_client::collect_sealed_derived_key`; caller decrypts client-side via `open_sealed_derived_key`, never sending the transport secret key to the service) → `mark_settled` → `prune_ciphertext` (gated on a retention window). Every state-changing step is logged through `quorum_audit`'s hash-chained log via `quorum_client::propose_and_cosign_and_replicate`.
+`register_invoice` → Postgres row + nullifier check (`ciphersettle_core::check_nullifier`) → `grant_settlement_access` → `derive_invoice_key` (caller supplies a transport public key; service brokers a k-of-n sealed derive against the live quorum via `quorum_client::collect_sealed_derived_key`; caller decrypts client-side via `open_sealed_derived_key`, never sending the transport secret key to the service) → `mark_settled` → `prune_ciphertext` (gated on a retention window). Every state-changing step is logged through `quorum_audit`'s hash-chained log: mutating handlers write an `audit_outbox` row in the SAME database transaction as the state change and a background drainer delivers it via `quorum_client::propose_audit_entry` (at-least-once; the API answers 202 'committed, audit pending' if delivery is delayed), while `derive_invoice_key` appends its audit record BEFORE deriving and denies the key (503) if the append fails (fail-closed).
 
 ## Invoice Lifecycle
 
@@ -104,8 +92,8 @@ See `PHASE3_README.md`'s numbered walkthrough (register → duplicate rejected �
 
 1. Caller generates a `TransportSecretKey` locally (never transmitted) and derives its `TransportPublicKey`.
 2. Caller calls `quorum_service`'s `derive_invoice_key` with `transport_public_key_b64` (+ optional `tried_subsets` for retry).
-3. `quorum_service` authenticates the caller, checks rate limits, fetches the invoice, and calls `quorum_client::collect_sealed_derived_key` with a freshly built, HMAC-signed, nonce'd, time-boxed `DeriveRequest` (via `quorum_core::build_derive_request`).
-4. Each `quorum_node` checks the authorization window, verifies the HMAC MAC against its configured `service_auth_key`, checks the nonce hasn't been used, signs its partial, self-verifies it, then seals it under the caller's transport public key together with a NIZK proof of correct encryption (`quorum_core::seal_partial_with_proof`), and returns `Message::DerivePartial { sealed_share, proof, .. }`.
+3. `quorum_service` authenticates the caller, checks rate limits, fetches the invoice, and calls `quorum_client::collect_sealed_derived_key` with freshly built, HMAC-signed, nonce'd, time-boxed `DeriveRequest`s, ONE PER NODE, each signed with that node's derived key (`quorum_core::build_derive_request`, `derive_node_auth_key`).
+4. Each `quorum_node` checks the authorization window, verifies the HMAC MAC against its own configured derived key (`service_auth_key_b64` in the node config holds the per-node key, not the master), checks the nonce hasn't been used, signs its partial, self-verifies it (debug builds only, see F-22), then seals it under the caller's transport public key together with a NIZK proof of correct encryption (`quorum_core::seal_partial_with_proof`), and returns `Message::DerivePartial { sealed_share, proof, .. }`.
 5. `quorum_client` **verifies each node's proof before combining** (`quorum_core::verify_sealed_partial`, deriving the expected public key share from the group's own Feldman commitment rather than trusting the node), then combines sealed shares (`quorum_vetseal::combine_sealed_shares`) without ever decrypting — `quorum_service` returns the still-sealed `SealedDerivedKey` + `used_node_ids` over HTTP.
 6. The true caller decrypts locally via `quorum_client::open_sealed_derived_key`, which also performs the final `verify()` against the DKG's public key — this is where a bad node in the combined subset is caught (triggering a retry with an updated `tried_subsets` list).
 
@@ -121,7 +109,7 @@ The live deployment shape used throughout the orchestrator/adversarial code is `
 
 - **mTLS identity** — per-node self-signed, pinned certificate; proves "you're talking to node N over the network."
 - **Audit-signing identity** — a separate per-node ed25519 keypair.
-- **Service-to-node authorization** — a shared `service_auth_key` (HMAC secret) known to `quorum_service` and baked into every node's config; explicitly bound with expiry+nonce+transport-key, but still fundamentally a shared-secret trust model, not an independently-verifiable external one.
+- **Service-to-node authorization** — a per-node HMAC key derived (HKDF-SHA256) from one master secret that only `quorum_service` holds; each node's config contains only its own derived key, so compromising one node does not let an attacker authorize derivations against the others. Requests are bound with expiry+nonce+transport-key. It is still a service-held-secret trust model: a compromised SERVICE can authorize anything, and nothing here is independently verifiable by an external authority (Gap 3 step 2 and the `VerificationAttestation` gap).
 - **HTTP API caller identity** — a pre-provisioned API-key → caller_id table in Postgres (not self-service signup).
 
 ## mTLS Architecture
@@ -130,7 +118,7 @@ Certificate-pinned (exact cert bytes), not hostname- or CA-based. `ServerName` i
 
 ## Node Architecture
 
-Single Tokio async process per node; `Shared` state behind a `tokio::sync::Mutex` covering DKG/derive state, plus a separate used-nonce tracking map (`used_derive_nonces`) for replay protection.
+Single Tokio async process per node; `Shared` state behind a `tokio::sync::Mutex` covering DKG/derive state, plus a separate used-nonce tracking map (`used_derive_nonces`) for replay protection, an audit-log replica persisted atomically (`audit_store`) and, in the pilot tier, an envelope-encrypted share file (`share_store`) so a restart resumes the same group key instead of re-running DKG.
 
 ## Orchestrator
 
@@ -142,15 +130,15 @@ Single Tokio async process per node; `Shared` state behind a `tokio::sync::Mutex
 
 ## Database
 
-Postgres via `deadpool-postgres` (a real connection pool). Schema is created idempotently at startup — `quorum_service/src/db.rs` issues `CREATE TABLE IF NOT EXISTS` for the `invoices` and `crypto_meta` tables rather than managing versioned migration files. 
+Postgres via `deadpool-postgres` (a real connection pool). Schema is managed by ordered, SHA-256-checksummed migrations (`quorum_service/src/migrations.rs`), applied in one transaction under an advisory lock at startup or via `quorum_service migrate <db_url>`; a database newer than the binary, or an edited already-applied migration, is refused. Migration 1 is the original idempotent blob, so legacy databases are adopted without data changes. Tables: `invoices`, `nullifiers`, `regulators`, `derive_call_times`, `crypto_meta`, `audit_outbox`, `audit_failures`, `schema_migrations`. There are no down-migrations (rollback = restore a backup; see `deploy/README.md`). 
 
 ## Audit System
 
-Distinguishes "stale replica" (length mismatch) from "tampered replica" (hash mismatch at a matched sequence number) during reconciliation.
+Distinguishes "stale replica" (length mismatch) from "tampered replica" (hash mismatch at a matched sequence number) during reconciliation. A proposal is acknowledged only after at least t+1 nodes confirm a durable (fsynced) commit; each node's copy survives SIGKILL (power-loss behaviour has NOT been rehearsed).
 
 ## Notary
 
-`quorum_notary` is a genuinely separate process/identity providing external, independently-verifiable notarization receipts.
+`quorum_notary` is a genuinely separate process/identity providing external, independently-verifiable notarization receipts. Its receipt file is appended with a plain write (not the atomic/fsync discipline the node audit log now has); that is an open item.
 
 ## Adversarial Testing
 
@@ -179,6 +167,7 @@ A malicious minority of quorum nodes (up to the threshold), a party that can rea
 - `VerificationAttestation` (the actual oracle-problem fix)
 - DKG resharing/rotation
 - DKG dispute resolution
+- Everything tracked in `docs/PRODUCTION_READINESS.md` (KMS/HSM, deployment, backups, rotation, monitoring depth, legal and audit items)
 
 ## Earlier Designs
 
