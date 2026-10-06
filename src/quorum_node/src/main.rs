@@ -226,6 +226,18 @@ fn decide_boot(config: &NodeConfig) -> Result<Boot, String> {
 /// Publishes the group public key, then the ready marker, atomically. A
 /// failure to publish is fatal: readiness must never be reported without the
 /// files that other components read.
+/// Signs a partial for `identity` and returns it only if it verifies against
+/// the group public key set under this node's id.
+fn checked_partial(
+    secret_share: &SecretKeyShare,
+    group_pks: &PublicKeySet,
+    node_id: usize,
+    identity: &str,
+) -> Option<quorum_core::SignatureShare> {
+    let partial = quorum_core::sign_partial(secret_share, identity);
+    quorum_core::verify_partial(group_pks, node_id, identity, &partial).then_some(partial)
+}
+
 fn write_pubkey_and_ready(pubkey_file: &str, ready_file: &str, group_pks: &PublicKeySet) {
     let pubkey_json = match serde_json::to_vec(group_pks) {
         Ok(j) => j,
@@ -791,18 +803,19 @@ async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
                     secret_share,
                     group_pks,
                 } => {
-                    let partial = quorum_core::sign_partial(secret_share, &identity);
-                    // Belt-and-suspenders: verify our own freshly-signed
-                    // partial before ever sealing and sending it. This
-                    // check existed on the client side already; keeping
-                    // it here too means a node never seals and ships a
-                    // partial it wouldn't itself trust.
-                    debug_assert!(quorum_core::verify_partial(
-                        group_pks,
-                        shared.node_id,
-                        &identity,
-                        &partial
-                    ));
+                    // Self-check at RUNTIME (F-22): a node never seals and ships a
+                    // partial it would not itself trust. Was a debug_assert!.
+                    if checked_partial(secret_share, group_pks, shared.node_id, &identity).is_none()
+                    {
+                        eprintln!(
+                            "[node {}] own partial failed self-verification; refusing to derive",
+                            shared.node_id
+                        );
+                        return Some(Message::DeriveReject {
+                            from: shared.node_id,
+                            reason: "internal error: partial failed self-verification".to_string(),
+                        });
+                    }
                     // Finding 2.3 fix: seal the partial under the
                     // caller-supplied transport public key rather than
                     // returning it in the clear. Only the true end
@@ -1081,5 +1094,55 @@ async fn finalize_if_ready(shared: &Arc<Shared>) {
                 shared.node_id
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod self_check_tests {
+    use super::*;
+    use quorum_core::DkgSession;
+
+    fn run_dkg(n: usize, t: usize) -> Vec<(SecretKeyShare, PublicKeySet)> {
+        let mut rng = thread_rng();
+        let mut sessions = Vec::new();
+        let mut commitments = Vec::new();
+        for id in 0..n {
+            let (s, c) = DkgSession::new(id, n, t, &mut rng);
+            sessions.push(s);
+            commitments.push(c);
+        }
+        for s in sessions.iter_mut() {
+            for (d, c) in commitments.iter().enumerate() {
+                s.receive_commitment(d, c.clone()).unwrap();
+            }
+        }
+        let shares: Vec<Vec<[u8; 32]>> = (0..n)
+            .map(|d| (0..n).map(|p| sessions[d].share_for(p)).collect())
+            .collect();
+        for (p, s) in sessions.iter_mut().enumerate() {
+            for (d, ds) in shares.iter().enumerate() {
+                s.receive_share(d, ds[p]).unwrap();
+            }
+        }
+        sessions
+            .into_iter()
+            .map(|s| s.finalize().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn self_check_accepts_a_genuine_partial() {
+        let nodes = run_dkg(3, 1);
+        let (share, pks) = &nodes[0];
+        assert!(checked_partial(share, pks, 0, "inv-1").is_some());
+    }
+
+    #[test]
+    fn self_check_rejects_a_partial_that_does_not_match_the_group_key() {
+        // Share from one DKG, group key from another: the partial cannot verify,
+        // and this must be refused at RUNTIME (F-22: it used to be debug-only).
+        let a = run_dkg(3, 1);
+        let b = run_dkg(3, 1);
+        assert!(checked_partial(&a[0].0, &b[0].1, 0, "inv-1").is_none());
     }
 }

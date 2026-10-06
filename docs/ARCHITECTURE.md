@@ -93,7 +93,7 @@ See `PHASE3_README.md`'s numbered walkthrough (register → duplicate rejected �
 1. Caller generates a `TransportSecretKey` locally (never transmitted) and derives its `TransportPublicKey`.
 2. Caller calls `quorum_service`'s `derive_invoice_key` with `transport_public_key_b64` (+ optional `tried_subsets` for retry).
 3. `quorum_service` authenticates the caller, checks rate limits, fetches the invoice, and calls `quorum_client::collect_sealed_derived_key` with freshly built, HMAC-signed, nonce'd, time-boxed `DeriveRequest`s, ONE PER NODE, each signed with that node's derived key (`quorum_core::build_derive_request`, `derive_node_auth_key`).
-4. Each `quorum_node` checks the authorization window, verifies the HMAC MAC against its own configured derived key (`service_auth_key_b64` in the node config holds the per-node key, not the master), checks the nonce hasn't been used, signs its partial, self-verifies it (debug builds only, see F-22), then seals it under the caller's transport public key together with a NIZK proof of correct encryption (`quorum_core::seal_partial_with_proof`), and returns `Message::DerivePartial { sealed_share, proof, .. }`.
+4. Each `quorum_node` checks the authorization window, verifies the HMAC MAC against its own configured derived key (`service_auth_key_b64` in the node config holds the per-node key, not the master), checks the nonce hasn't been used, signs its partial, self-verifies it at runtime and refuses to derive if the check fails (F-22, fixed session 24), then seals it under the caller's transport public key together with a NIZK proof of correct encryption (`quorum_core::seal_partial_with_proof`), and returns `Message::DerivePartial { sealed_share, proof, .. }`.
 5. `quorum_client` **verifies each node's proof before combining** (`quorum_core::verify_sealed_partial`, deriving the expected public key share from the group's own Feldman commitment rather than trusting the node), then combines sealed shares (`quorum_vetseal::combine_sealed_shares`) without ever decrypting — `quorum_service` returns the still-sealed `SealedDerivedKey` + `used_node_ids` over HTTP.
 6. The true caller decrypts locally via `quorum_client::open_sealed_derived_key`, which also performs the final `verify()` against the DKG's public key — this is where a bad node in the combined subset is caught (triggering a retry with an updated `tried_subsets` list).
 
@@ -138,7 +138,7 @@ Distinguishes "stale replica" (length mismatch) from "tampered replica" (hash mi
 
 ## Notary
 
-`quorum_notary` is a genuinely separate process/identity providing external, independently-verifiable notarization receipts. Its receipt file is appended with a plain write (not the atomic/fsync discipline the node audit log now has); that is an open item.
+`quorum_notary` is a genuinely separate process/identity providing external, independently-verifiable notarization receipts. A receipt is appended as one fsynced line (file and directory) BEFORE it is recorded or returned; if the write fails the notary returns no receipt (F-23, fixed session 24). The append is durable but not a rewrite-atomic file: a torn final line from a power cut is skipped on reload, not repaired, and power loss itself was not tested.
 
 ## Adversarial Testing
 

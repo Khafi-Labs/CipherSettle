@@ -1,0 +1,5 @@
+error[E0599]: no method named `is_err` found for unit type `()` in the current scope
+error[E0599]: no method named `unwrap` found for unit type `()` in the current scope
+error[E0599]: no method named `unwrap` found for unit type `()` in the current scope
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `quorum_notary` (bin "quorum_notary" test) due to 3 previous errors

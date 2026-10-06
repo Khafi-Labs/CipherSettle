@@ -232,8 +232,15 @@ async fn handle_connection(
                     notarized_at_unix_ms,
                     notary_signature,
                 };
+                // Persist FIRST: a receipt that is not on disk is never recorded
+                // or returned (the client sees no receipt, like a clock refusal).
+                if let Err(e) = append_receipt(&shared.receipts_file, &receipt) {
+                    eprintln!(
+                        "[notary] could not persist receipt {sequence}: {e}; refusing to notarize"
+                    );
+                    continue;
+                }
                 receipts.push(receipt.clone());
-                append_receipt(&shared.receipts_file, &receipt);
                 eprintln!(
                     "[notary] notarized root hash at sequence {sequence} (t={notarized_at_unix_ms}ms)"
                 );
@@ -270,21 +277,86 @@ fn load_receipts(path: &str) -> Vec<NotarizationReceipt> {
         .collect()
 }
 
-fn append_receipt(path: &str, receipt: &NotarizationReceipt) {
-    if let Some(parent) = std::path::Path::new(path).parent() {
-        let _ = std::fs::create_dir_all(parent);
+/// Durably append one receipt line: single write, fsync the file, fsync the
+/// directory. Any failure is returned so the caller never hands out a receipt
+/// that would be lost on restart (F-23).
+fn append_receipt(path: &str, receipt: &NotarizationReceipt) -> std::io::Result<()> {
+    let p = std::path::Path::new(path);
+    let parent = p.parent().filter(|d| !d.as_os_str().is_empty());
+    if let Some(parent) = parent {
+        std::fs::create_dir_all(parent)?;
     }
-    let Ok(mut file) = std::fs::OpenOptions::new()
+    let mut line = serde_json::to_string(receipt)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    line.push('\n');
+    let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(path)
-    else {
-        eprintln!(
-            "[notary] WARNING: failed to open {path} for append -- receipt not persisted to disk"
+        .open(p)?;
+    file.write_all(line.as_bytes())?;
+    file.sync_all()?;
+    if let Some(parent) = parent {
+        std::fs::File::open(parent)?.sync_all()?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod receipt_persistence_tests {
+    use super::*;
+
+    fn receipt(seq: u64) -> NotarizationReceipt {
+        NotarizationReceipt {
+            sequence: seq,
+            root_hash: [7u8; 32],
+            notarized_at_unix_ms: 1,
+            notary_signature: vec![1, 2, 3],
+        }
+    }
+
+    fn tmpdir(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("notary_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn append_reports_failure_when_path_is_unwritable() {
+        // Parent "directory" is a regular file: the append cannot succeed and the
+        // caller MUST be told (F-23: this used to be swallowed).
+        let d = tmpdir("unwritable");
+        let blocker = d.join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        let path = blocker.join("receipts.jsonl");
+        assert!(append_receipt(path.to_str().unwrap(), &receipt(0)).is_err());
+    }
+
+    #[test]
+    fn append_persists_whole_lines_that_reload() {
+        let d = tmpdir("ok");
+        let path = d.join("sub").join("receipts.jsonl");
+        let p = path.to_str().unwrap();
+        append_receipt(p, &receipt(0)).unwrap();
+        append_receipt(p, &receipt(1)).unwrap();
+        let loaded = load_receipts(p);
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[1].sequence, 1);
+    }
+
+    #[test]
+    fn unpersisted_receipt_is_not_handed_out() {
+        // The handler must persist BEFORE it records/returns a receipt.
+        let src = include_str!("main.rs");
+        let h = src
+            .find("NotaryMessage::NotarizeRequest { root_hash } =>")
+            .unwrap();
+        let body = &src[h..];
+        let a = body.find("append_receipt(").unwrap();
+        let p = body.find("receipts.push(").unwrap();
+        assert!(
+            a < p,
+            "receipt must be persisted before it is pushed/returned"
         );
-        return;
-    };
-    if let Ok(line) = serde_json::to_string(receipt) {
-        let _ = writeln!(file, "{line}");
     }
 }
