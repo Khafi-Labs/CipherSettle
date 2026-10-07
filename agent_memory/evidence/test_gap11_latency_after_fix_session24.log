@@ -1,0 +1,47 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/main.rs (/tmp/t_g11/debug/deps/quorum_service-00f294a5e6b046a5)
+
+running 18 tests
+test api_key_auth_tests::empty_key_list_rejects_everything ... ok
+test api_key_auth_tests::correct_key_resolves_to_its_caller_id ... ok
+test api_key_auth_tests::near_miss_key_sharing_a_long_prefix_is_still_rejected ... ok
+test api_key_auth_tests::raw_key_is_never_recoverable_from_the_stored_entry ... ok
+test api_key_auth_tests::wrong_key_is_rejected ... ok
+test db::decision_matrix_tests::decision_matrix_is_exhaustive_and_never_overwrites_a_foreign_marker ... ok
+test db::epoch_tests::acknowledgement_stamps_an_unstamped_database_with_invoices ... ok
+test db::epoch_tests::empty_unstamped_database_is_stamped ... ok
+test db::epoch_tests::matching_marker_proceeds_regardless_of_data ... ok
+test db::epoch_tests::mismatched_marker_is_refused_even_when_acknowledged ... ok
+test db::epoch_tests::unstamped_database_with_invoices_is_refused_without_acknowledgement ... ok
+test db::metrics_tests::nothing_unfinished_means_age_zero_and_a_future_row_is_not_negative ... ok
+test db::metrics_tests::renders_every_series_with_exact_values ... ok
+test http_metrics::tests::counts_requests_and_splits_4xx_from_5xx ... ok
+test http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count ... ok
+test http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched ... ok
+test http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded ... ok
+test f21_regression_tests::regression_malformed_request_base64_is_an_error_not_a_panic ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/db_pool_concurrency.rs (/tmp/t_g11/debug/deps/db_pool_concurrency-fdd9c7623ca2c0e5)
+
+running 2 tests
+test pool_hands_out_multiple_simultaneous_connections ... ok
+test db_helpers_work_unchanged_against_a_pooled_client ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.32s
+
+     Running tests/migrations.rs (/tmp/t_g11/debug/deps/migrations-bf1d85d3cbce7c63)
+
+running 8 tests
+test m0_builtin_list_is_well_formed ... ok
+test m1_fresh_database_gets_every_table_and_a_recorded_checksum ... ok
+test m2_rerun_is_a_noop ... ok
+test m4_database_newer_than_this_binary_is_refused_and_left_untouched ... ok
+test m3_legacy_database_without_a_migrations_table_is_adopted_without_data_loss ... ok
+test m5_an_edited_already_applied_migration_is_refused ... ok
+test m7_a_failing_migration_rolls_back_completely ... ok
+test m6_concurrent_migrators_apply_each_migration_exactly_once ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.59s
+

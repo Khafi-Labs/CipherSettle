@@ -51,6 +51,7 @@
 mod config;
 mod db;
 mod error;
+mod http_metrics;
 mod migrations;
 mod tls_serve;
 
@@ -94,6 +95,8 @@ fn hash_api_key(raw_key: &str) -> [u8; 32] {
 }
 
 struct AppState {
+    /// Gap 11: per-route request/error/latency series (see `http_metrics`).
+    http_metrics: Arc<http_metrics::HttpMetrics>,
     /// Audit finding A10: previously a single `Mutex<tokio_postgres::Client>`,
     /// which serializes every database operation across every concurrent
     /// request regardless of whether they touch the same rows. Replaced with
@@ -450,7 +453,8 @@ struct RegisterInvoiceResp {
 /// Gap 11: liveness. No auth, no state, no secrets: "the process is serving HTTP".
 /// Gap 11: Prometheus metrics, ADMIN-ONLY (operational data about audit
 /// backlog; scrape with the admin API key as a bearer token). Database-derived
-/// gauges only: there are NO request-latency or error-rate counters yet.
+/// gauges plus the per-route HTTP request/error/latency series from
+/// `http_metrics` (matched route patterns only, bounded cardinality).
 async fn metrics(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -483,7 +487,11 @@ async fn metrics(
             axum::http::header::CONTENT_TYPE,
             "text/plain; version=0.0.4; charset=utf-8",
         )],
-        db::render_metrics(&snap, now),
+        format!(
+            "{}{}",
+            db::render_metrics(&snap, now),
+            state.http_metrics.render()
+        ),
     ))
 }
 
@@ -1355,6 +1363,7 @@ async fn main() {
         .map(|k| ApiKeyEntry::new(&k.key, k.caller_id.clone()))
         .collect();
 
+    let http_metrics = Arc::new(http_metrics::HttpMetrics::new());
     let state = Arc::new(AppState {
         db: db_pool,
         api_keys,
@@ -1386,6 +1395,7 @@ async fn main() {
         merkle_log: tokio::sync::Mutex::new(merkle_log),
         audit_lock: tokio::sync::Mutex::new(()),
         ready_cache: tokio::sync::Mutex::new(None),
+        http_metrics: http_metrics.clone(),
     });
     tokio::spawn(audit_outbox_drainer(state.clone()));
 
@@ -1403,7 +1413,11 @@ async fn main() {
         .route("/invoices/:id/merkle-proof", get(get_merkle_proof))
         .route("/regulators", post(register_regulator))
         .route("/regulators/:id", delete(revoke_regulator))
-        .with_state(state);
+        .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            http_metrics,
+            http_metrics::track,
+        ));
 
     eprintln!("[service] listening on {}", config.listen_addr);
 

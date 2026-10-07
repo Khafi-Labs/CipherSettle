@@ -1,0 +1,182 @@
+   Compiling quorum_service v0.1.0 (/home/claude/wt_g11/src/quorum_service)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.84s
+     Running unittests src/main.rs (/tmp/t_g11/debug/deps/quorum_service-00f294a5e6b046a5)
+
+running 4 tests
+test http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count ... ok
+test http_metrics::tests::counts_requests_and_splits_4xx_from_5xx ... FAILED
+test http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched ... FAILED
+test http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded ... ok
+
+failures:
+
+---- http_metrics::tests::counts_requests_and_splits_4xx_from_5xx stdout ----
+
+thread 'http_metrics::tests::counts_requests_and_splits_4xx_from_5xx' (4681) panicked at src/quorum_service/src/http_metrics.rs:213:13:
+missing "ciphersettle_http_errors_total{route=\"/a\",method=\"GET\",class=\"4xx\"} 2\n" in # HELP ciphersettle_http_requests_total HTTP requests by matched route pattern and method.
+# TYPE ciphersettle_http_requests_total counter
+ciphersettle_http_requests_total{route="/a",method="GET"} 5
+# HELP ciphersettle_http_errors_total HTTP responses with 4xx/5xx status.
+# TYPE ciphersettle_http_errors_total counter
+ciphersettle_http_errors_total{route="/a",method="GET",class="4xx"} 0
+ciphersettle_http_errors_total{route="/a",method="GET",class="5xx"} 0
+# HELP ciphersettle_http_request_duration_seconds HTTP handler latency.
+# TYPE ciphersettle_http_request_duration_seconds histogram
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="0.005"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="0.01"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="0.025"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="0.05"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="0.1"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="0.25"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="0.5"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="1"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="2.5"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="5"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="10"} 5
+ciphersettle_http_request_duration_seconds_bucket{route="/a",method="GET",le="+Inf"} 5
+ciphersettle_http_request_duration_seconds_sum{route="/a",method="GET"} 0.005
+ciphersettle_http_request_duration_seconds_count{route="/a",method="GET"} 5
+
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: quorum_service::http_metrics::tests::counts_requests_and_splits_4xx_from_5xx
+             at ./src/http_metrics.rs:213:13
+   3: quorum_service::http_metrics::tests::counts_requests_and_splits_4xx_from_5xx::{closure#0}
+             at ./src/http_metrics.rs:200:49
+   4: <quorum_service::http_metrics::tests::counts_requests_and_splits_4xx_from_5xx::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+   5: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched stdout ----
+
+thread 'http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched' (4683) panicked at src/quorum_service/src/http_metrics.rs:309:13:
+missing "ciphersettle_http_errors_total{route=\"/boom\",method=\"GET\",class=\"5xx\"} 1\n" in # HELP ciphersettle_http_requests_total HTTP requests by matched route pattern and method.
+# TYPE ciphersettle_http_requests_total counter
+ciphersettle_http_requests_total{route="/boom",method="GET"} 1
+ciphersettle_http_requests_total{route="/invoices/:id/grant",method="POST"} 2
+ciphersettle_http_requests_total{route="unmatched",method="GET"} 2
+# HELP ciphersettle_http_errors_total HTTP responses with 4xx/5xx status.
+# TYPE ciphersettle_http_errors_total counter
+ciphersettle_http_errors_total{route="/boom",method="GET",class="4xx"} 0
+ciphersettle_http_errors_total{route="/boom",method="GET",class="5xx"} 0
+ciphersettle_http_errors_total{route="/invoices/:id/grant",method="POST",class="4xx"} 0
+ciphersettle_http_errors_total{route="/invoices/:id/grant",method="POST",class="5xx"} 0
+ciphersettle_http_errors_total{route="unmatched",method="GET",class="4xx"} 0
+ciphersettle_http_errors_total{route="unmatched",method="GET",class="5xx"} 0
+# HELP ciphersettle_http_request_duration_seconds HTTP handler latency.
+# TYPE ciphersettle_http_request_duration_seconds histogram
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="0.005"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="0.01"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="0.025"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="0.05"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="0.1"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="0.25"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="0.5"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="1"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="2.5"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="5"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="10"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/boom",method="GET",le="+Inf"} 1
+ciphersettle_http_request_duration_seconds_sum{route="/boom",method="GET"} 0.000003903
+ciphersettle_http_request_duration_seconds_count{route="/boom",method="GET"} 1
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="0.005"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="0.01"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="0.025"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="0.05"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="0.1"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="0.25"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="0.5"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="1"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="2.5"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="5"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="10"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="/invoices/:id/grant",method="POST",le="+Inf"} 2
+ciphersettle_http_request_duration_seconds_sum{route="/invoices/:id/grant",method="POST"} 0.000030433
+ciphersettle_http_request_duration_seconds_count{route="/invoices/:id/grant",method="POST"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="0.005"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="0.01"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="0.025"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="0.05"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="0.1"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="0.25"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="0.5"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="1"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="2.5"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="5"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="10"} 2
+ciphersettle_http_request_duration_seconds_bucket{route="unmatched",method="GET",le="+Inf"} 2
+ciphersettle_http_request_duration_seconds_sum{route="unmatched",method="GET"} 0.0000059339999999999994
+ciphersettle_http_request_duration_seconds_count{route="unmatched",method="GET"} 2
+
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched::{closure#0}
+             at ./src/http_metrics.rs:309:13
+   3: <core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>> as core::future::future::Future>::poll
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/future/future.rs:133:9
+   4: <core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>> as core::future::future::Future>::poll
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/future/future.rs:133:9
+   5: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:830:70
+   6: tokio::task::coop::with_budget::<core::task::poll::Poll<()>, <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/task/coop/mod.rs:167:5
+   7: tokio::task::coop::budget::<core::task::poll::Poll<()>, <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/task/coop/mod.rs:133:5
+   8: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:830:25
+   9: <tokio::runtime::scheduler::current_thread::Context>::enter::<core::task::poll::Poll<()>, <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:488:19
+  10: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:829:44
+  11: <tokio::runtime::scheduler::current_thread::CoreGuard>::enter::<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:906:68
+  12: <tokio::runtime::context::scoped::Scoped<tokio::runtime::scheduler::Context>>::set::<<tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}, (alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>)>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context/scoped.rs:40:9
+  13: tokio::runtime::context::set_scheduler::<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context.rs:187:38
+  14: <std::thread::local::LocalKey<tokio::runtime::context::Context>>::try_with::<tokio::runtime::context::set_scheduler<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>::{closure#0}, (alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>)>
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/thread/local.rs:462:12
+  15: <std::thread::local::LocalKey<tokio::runtime::context::Context>>::with::<tokio::runtime::context::set_scheduler<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>::{closure#0}, (alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>)>
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/thread/local.rs:426:20
+  16: tokio::runtime::context::set_scheduler::<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context.rs:187:17
+  17: <tokio::runtime::scheduler::current_thread::CoreGuard>::enter::<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:906:27
+  18: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:817:24
+  19: <tokio::runtime::scheduler::current_thread::CurrentThread>::block_on::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:218:33
+  20: tokio::runtime::context::runtime::enter_runtime::<<tokio::runtime::scheduler::current_thread::CurrentThread>::block_on<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>::{closure#0}, ()>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context/runtime.rs:65:16
+  21: <tokio::runtime::scheduler::current_thread::CurrentThread>::block_on::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:206:9
+  22: <tokio::runtime::runtime::Runtime>::block_on_inner::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/runtime.rs:374:52
+  23: <tokio::runtime::runtime::Runtime>::block_on::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/runtime.rs:343:18
+  24: quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched
+             at ./src/http_metrics.rs:308:11
+  25: quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched::{closure#0}
+             at ./src/http_metrics.rs:283:77
+  26: <quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+  27: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    http_metrics::tests::counts_requests_and_splits_4xx_from_5xx
+    http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.12s
+
+error: test failed, to rerun pass `-p quorum_service --bin quorum_service`

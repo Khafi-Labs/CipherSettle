@@ -1,0 +1,183 @@
+warning: constant `OVERFLOW` is never used
+  --> src/quorum_service/src/http_metrics.rs:25:7
+   |
+25 | const OVERFLOW: &str = "overflow";
+   |       ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `count`, `errors_4xx`, `errors_5xx`, `buckets`, and `sum_seconds` are never read
+  --> src/quorum_service/src/http_metrics.rs:29:5
+   |
+28 | struct Series {
+   |        ------ fields in this struct
+29 |     count: u64,
+   |     ^^^^^
+30 |     errors_4xx: u64,
+   |     ^^^^^^^^^^
+31 |     errors_5xx: u64,
+   |     ^^^^^^^^^^
+32 |     /// Non-cumulative per-bucket counts; the last slot is `+Inf`.
+33 |     buckets: [u64; BUCKETS_S.len() + 1],
+   |     ^^^^^^^
+34 |     sum_seconds: f64,
+   |     ^^^^^^^^^^^
+   |
+   = note: `Series` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: function `norm_method` is never used
+  --> src/quorum_service/src/http_metrics.rs:42:4
+   |
+42 | fn norm_method(m: &str) -> &'static str {
+   |    ^^^^^^^^^^^
+
+warning: function `esc` is never used
+  --> src/quorum_service/src/http_metrics.rs:55:4
+   |
+55 | fn esc(s: &str) -> String {
+   |    ^^^
+
+warning: `quorum_service` (bin "quorum_service" test) generated 4 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.84s
+     Running unittests src/main.rs (/tmp/t_g11/debug/deps/quorum_service-00f294a5e6b046a5)
+
+running 4 tests
+test http_metrics::tests::counts_requests_and_splits_4xx_from_5xx ... FAILED
+test http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count ... FAILED
+test http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded ... FAILED
+test http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched ... FAILED
+
+failures:
+
+---- http_metrics::tests::counts_requests_and_splits_4xx_from_5xx stdout ----
+
+thread 'http_metrics::tests::counts_requests_and_splits_4xx_from_5xx' (336) panicked at src/quorum_service/src/http_metrics.rs:119:13:
+missing "ciphersettle_http_requests_total{route=\"/a\",method=\"GET\"} 5\n" in 
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: quorum_service::http_metrics::tests::counts_requests_and_splits_4xx_from_5xx
+             at ./src/http_metrics.rs:119:13
+   3: quorum_service::http_metrics::tests::counts_requests_and_splits_4xx_from_5xx::{closure#0}
+             at ./src/http_metrics.rs:106:49
+   4: <quorum_service::http_metrics::tests::counts_requests_and_splits_4xx_from_5xx::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+   5: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count stdout ----
+
+thread 'http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count' (337) panicked at src/quorum_service/src/http_metrics.rs:139:13:
+missing "duration_seconds_bucket{route=\"/h\",method=\"POST\",le=\"0.005\"} 1\n" in 
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: quorum_service::http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count
+             at ./src/http_metrics.rs:139:13
+   3: quorum_service::http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count::{closure#0}
+             at ./src/http_metrics.rs:124:56
+   4: <quorum_service::http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+   5: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded stdout ----
+
+thread 'http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded' (365) panicked at src/quorum_service/src/http_metrics.rs:150:9:
+assertion failed: m.render().contains("ciphersettle_http_requests_total{route=\"/x\",method=\"OTHER\"} 2\n")
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: core::panicking::panic
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:150:5
+   3: quorum_service::http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded
+             at ./src/http_metrics.rs:150:9
+   4: quorum_service::http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded::{closure#0}
+             at ./src/http_metrics.rs:146:62
+   5: <quorum_service::http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+   6: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched stdout ----
+
+thread 'http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched' (364) panicked at src/quorum_service/src/http_metrics.rs:206:13:
+missing "ciphersettle_http_requests_total{route=\"/invoices/:id/grant\",method=\"POST\"} 2\n" in 
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched::{closure#0}
+             at ./src/http_metrics.rs:206:13
+   3: <core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>> as core::future::future::Future>::poll
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/future/future.rs:133:9
+   4: <core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>> as core::future::future::Future>::poll
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/future/future.rs:133:9
+   5: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:830:70
+   6: tokio::task::coop::with_budget::<core::task::poll::Poll<()>, <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/task/coop/mod.rs:167:5
+   7: tokio::task::coop::budget::<core::task::poll::Poll<()>, <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/task/coop/mod.rs:133:5
+   8: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:830:25
+   9: <tokio::runtime::scheduler::current_thread::Context>::enter::<core::task::poll::Poll<()>, <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:488:19
+  10: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:829:44
+  11: <tokio::runtime::scheduler::current_thread::CoreGuard>::enter::<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:906:68
+  12: <tokio::runtime::context::scoped::Scoped<tokio::runtime::scheduler::Context>>::set::<<tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}, (alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>)>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context/scoped.rs:40:9
+  13: tokio::runtime::context::set_scheduler::<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context.rs:187:38
+  14: <std::thread::local::LocalKey<tokio::runtime::context::Context>>::try_with::<tokio::runtime::context::set_scheduler<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>::{closure#0}, (alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>)>
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/thread/local.rs:462:12
+  15: <std::thread::local::LocalKey<tokio::runtime::context::Context>>::with::<tokio::runtime::context::set_scheduler<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>::{closure#0}, (alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>)>
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/thread/local.rs:426:20
+  16: tokio::runtime::context::set_scheduler::<(alloc::boxed::Box<tokio::runtime::scheduler::current_thread::Core>, core::option::Option<()>), <tokio::runtime::scheduler::current_thread::CoreGuard>::enter<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>::{closure#0}>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context.rs:187:17
+  17: <tokio::runtime::scheduler::current_thread::CoreGuard>::enter::<<tokio::runtime::scheduler::current_thread::CoreGuard>::block_on<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>::{closure#0}, core::option::Option<()>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:906:27
+  18: <tokio::runtime::scheduler::current_thread::CoreGuard>::block_on::<core::pin::Pin<&mut core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:817:24
+  19: <tokio::runtime::scheduler::current_thread::CurrentThread>::block_on::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>::{closure#0}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:218:33
+  20: tokio::runtime::context::runtime::enter_runtime::<<tokio::runtime::scheduler::current_thread::CurrentThread>::block_on<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>::{closure#0}, ()>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/context/runtime.rs:65:16
+  21: <tokio::runtime::scheduler::current_thread::CurrentThread>::block_on::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/scheduler/current_thread/mod.rs:206:9
+  22: <tokio::runtime::runtime::Runtime>::block_on_inner::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/runtime.rs:374:52
+  23: <tokio::runtime::runtime::Runtime>::block_on::<core::pin::Pin<&mut dyn core::future::future::Future<Output = ()>>>
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/runtime/runtime.rs:343:18
+  24: quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched
+             at ./src/http_metrics.rs:205:11
+  25: quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched::{closure#0}
+             at ./src/http_metrics.rs:189:77
+  26: <quorum_service::http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+  27: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    http_metrics::tests::counts_requests_and_splits_4xx_from_5xx
+    http_metrics::tests::histogram_is_cumulative_with_inf_sum_and_count
+    http_metrics::tests::middleware_labels_by_pattern_not_raw_path_and_folds_unmatched
+    http_metrics::tests::unknown_methods_collapse_and_series_count_is_bounded
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 14 filtered out; finished in 2.19s
+
+error: test failed, to rerun pass `-p quorum_service --bin quorum_service`

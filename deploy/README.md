@@ -51,4 +51,8 @@ The KEK file for share encryption (`share_store`) is already a separate 0600 fil
   answer a filtered read over the pinned mTLS channel; otherwise `503` (`database unavailable` / `quorum unavailable`, no
   node or address in the body). Result cached 1 s. Reachability, not proof that nodes hold shares.
 * `GET /metrics` — Prometheus text, ADMIN API key required (401 without a key, 403 for a non-admin key): audit outbox rows
-  by status, age of the oldest undelivered audit, invoices, audit failures. No latency or error-rate series yet.
+  by status, age of the oldest undelivered audit, invoices, audit failures, plus per-route HTTP series
+  (`ciphersettle_http_requests_total`, `ciphersettle_http_errors_total{class="4xx|5xx"}`,
+  `ciphersettle_http_request_duration_seconds` histogram). The `route` label is the matched route pattern (e.g.
+  `/invoices/:id/grant`), never the raw path; unknown paths share `unmatched`; at most 64 route/method series, extras fold
+  into `overflow`. In-process and reset on restart; no alert rules use these series yet.
