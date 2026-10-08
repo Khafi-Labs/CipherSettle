@@ -7,6 +7,25 @@ Implements the Phase 3 exit criteria of the project's original phased roadmap (t
 > matching the method set of the project's earlier Internet Computer
 > canister prototype."
 
+> **Current state (session 25, commit 766c1a4).** This file records what Phase 3
+> delivered; later work changed these points:
+> - Schema: versioned, checksummed, transactional migrations with an advisory
+>   lock (`quorum_service/src/migrations.rs`, `quorum_service migrate <db_url>`)
+>   replace "created idempotently at startup". Down-migrations do not exist.
+> - Audit ordering: derive is audit-first and fail-closed; the other actions
+>   write their state change and an `audit_outbox` row in one transaction and
+>   return 202 "pending" if the quorum is unavailable (at-least-once drainer;
+>   F-13/F-14). Replication is no longer fire-and-forget: nodes acknowledge a
+>   durable commit and the client waits for `t+1` acks (F-19).
+> - Extra routes: `/healthz`, `/readyz`, admin-only Prometheus `/metrics`
+>   (with per-route request/error/latency series).
+> - Known gaps: `GET /audit-log` and `GET /invoices/:id/merkle-proof` require no
+>   credentials (F-26); the service reaches Postgres over plain TCP (F-27); the
+>   test-only `insecure_skip_share_proofs` flag is not refused outside tests
+>   (F-28).
+> - Audit entries are never reconciled or notarized by the running service
+>   (F-24).
+
 ## New crates
 
 - **`quorum_client`** (new library, extracted from `quorum_orchestrator`)

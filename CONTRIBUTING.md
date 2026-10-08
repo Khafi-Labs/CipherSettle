@@ -66,13 +66,28 @@ cargo fmt --all -- --check
 bash ci/check_pin_policy.sh
 ```
 
-These are exactly what `.github/workflows/ci.yml` runs. `cargo deny check`
+`bash ci/run_local_regression.sh <outdir>` runs all of the above plus the
+docs-claims check and its self-test, the Dockerfile policy check, the fuzz-crate
+type-check, the DB-tests-really-ran and broken-DB negative checks and the
+default adversarial suite (82 checks, which must all pass). It does NOT run
+GitHub Actions, `cargo audit`/`cargo deny`, fuzzing, the orchestrator end to
+end, a power-loss rehearsal or the Test E flake campaign (its last lines say
+so). Run `bash ci/check_docs_claims.sh` after touching any `.md` file: it
+fails on stale paths, Rust versions, check counts, undocumented routes and a
+wrong crate-dependency map. `.github/workflows/ci.yml` runs the same steps
+and more; it has never yet run on GitHub. `cargo deny check`
 enforces the policy in `deny.toml` (advisories, licenses, dependency sources);
 `cargo-audit` and `cargo-deny` are installed with `cargo install --locked`
 (CI pins `cargo-audit 0.22.2`, `cargo-deny 0.20.2`) and run in a separate job
 from the workspace build.
 
 ## Code style
+Production crate roots deny `clippy::unwrap_used`, `expect_used`, `panic`,
+`unreachable`, `todo` and `unimplemented` outside tests (startup failures go
+through `quorum_core::config::{fatal, or_fatal}`); do not add `#[allow]` to
+get around them. Bug fixes and security changes are made test-first: add the
+failing test, record the red output under `agent_memory/evidence/`, then fix.
+Never weaken a check, add a retry to make a test pass, or mark a test ignored.
 Please adhere to the standard Rust formatting guidelines. Ensure `cargo fmt`
 has been run on all modified files. Documentation comments and clear rationale
 for complex logic are required, especially for consensus and cryptographic

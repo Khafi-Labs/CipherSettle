@@ -18,6 +18,19 @@ that would satisfy them. Nothing in this repository substitutes for
 independent cryptographic peer review — including this suite, which was
 written by the same process that built the system it attacks.
 
+> **Current state (session 25, commit 766c1a4).** The suite has grown well past
+> the original 41 checks: the default run is 82 checks (groups A-G, I-N, P, Q,
+> R, S, T, W and Z; group H adds 2 and needs root + `iptables`), verified at
+> 82/82 by `ci/run_local_regression.sh` (EXECUTED). The group H caveat below is
+> historical: with real `iptables` as root, H passed 2/2 in session 22. Groups
+> G, J, K, N and Z need Postgres and report SKIPPED (a failure) without it. A
+> full run takes minutes, not the 12-20 seconds quoted below. Later groups
+> cover share persistence (P), audit-log durability under SIGKILL and journal
+> damage (Q), acknowledged-implies-durable (R), per-node derive keys (S),
+> secret files (T), seeded parser fuzzing (W) and service audit/health/metrics
+> semantics (Z). It is written by the same process that built the system and is
+> not an independent review.
+
 ## New crate
 
 **`quorum_adversarial`** — a binary that spins up real, fresh quorums
@@ -61,7 +74,7 @@ is not.
 | E | Two proposers concurrently appending conflicting audit entries at the same sequence number | Reproduces the documented lost-write race (timing-sensitive; doesn't always trigger in a given run, and is labeled honestly either way). **Known to be flaky under load — see the note below** |
 | F | Connecting to a node with no client certificate, and with a valid-but-unpinned client certificate | Both rejected (note: detecting this correctly requires a follow-up read/write, not just checking `.connect()`'s result — see the "testing methodology" note below) |
 | G | The HTTP API: no auth header, bad API key, SQL-injection-shaped path parameter, oversized payload, rate-limit exceeded | All correctly rejected with the right status code; the invoices table survives the injection attempt |
-| H | A real `iptables`-enforced network partition (not a process kill) during DKG, then healing it | The genuinely cut-off nodes don't finalize while partitioned; ALL nodes finalize once healed, proving `quorum_node`'s unbounded-retry connect loop actually rides out a real partition. **Unconfirmed — see the verification caveat above** |
+| H | A real `iptables`-enforced network partition (not a process kill) during DKG, then healing it | The genuinely cut-off nodes don't finalize while partitioned; ALL nodes finalize once healed, proving `quorum_node`'s unbounded-retry connect loop actually rides out a real partition. **Historically unconfirmed; first observed passing in session 22 (2/2, real `iptables`)** |
 | I | Killing `node_addrs[0]` outright, then proposing a new audit entry | Propose still succeeds quickly via a majority of the remaining nodes — added in Stage F to close Finding 2.2 (previously the tip read was hardcoded to `node_addrs[0]` specifically, so this would have exhausted every retry and failed outright) |
 | J | A malicious node in the first subset the service tries, forcing a retry against a different subset | The sealed-share retry protocol recovers without the caller having to supply the substitution logic |
 | K | TLS termination by `quorum_service` | Misconfigured off-loopback without TLS refuses to start; plaintext loopback still works; a configured TLS handshake completes and carries a real HTTP response; a plaintext request against the TLS port is not served in the clear |

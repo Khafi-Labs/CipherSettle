@@ -6,6 +6,22 @@ Implements the Phase 2 exit criteria of the project's original phased roadmap (t
 > -- reconciliation catches it -- and a notarization job running on a
 > schedule."
 
+> **Current state (session 25, commit 766c1a4).** This file records what Phase 2
+> delivered. Corrections that matter to a new reader:
+> - The "notarization job running on a schedule" and the reconciliation run exist
+>   ONLY inside the orchestrator demo (and the adversarial suite). `quorum_notary`
+>   is request-driven and `quorum_node` / `quorum_service` never reconcile or
+>   notarize on their own, so a deployed system does not detect a rewritten log
+>   by itself (finding F-24).
+> - `AuditLog::majority_reference` counts votes only among replicas that HAVE an
+>   entry at a sequence, so a single replica with a longer log extends the
+>   reference (F-25, pinned by a unit test).
+> - Nodes now persist the log as an atomic snapshot plus an append-only journal,
+>   acknowledge an entry only after it is durable (`AuditEntryCommitted`, F-19)
+>   and use a two-phase vote/replicate protocol; the notary's receipt file is
+>   fsynced before a receipt is returned (F-23).
+> - The vote-TTL split-quorum hazard (R-2) is still open at the protocol level.
+
 ## New/extended crates
 
 - **`quorum_audit`** (new) — transport-agnostic hash-chained, multi-signed

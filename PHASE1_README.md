@@ -6,6 +6,21 @@ Implements the Phase 1 exit criteria of the project's original phased roadmap (t
 > and derive calls over real mTLS, with one node killed mid-test to
 > confirm k-of-n liveness works as designed."
 
+> **Current state (session 25, commit 766c1a4).** This file records what Phase 1
+> delivered; later phases changed some of it. Where the text below says
+> otherwise, trust this note and `docs/ARCHITECTURE.md`:
+> - Shares are no longer lost on restart: with `persistence` configured a node
+>   stores its share in an AES-256-GCM envelope file (key-encryption key in a
+>   separate 0600 file, PILOT tier, no KMS/HSM) and resumes the same group key;
+>   a node with no persistence refuses to start unless `allow_ephemeral_share`
+>   is set (the orchestrator and tests use that for throwaway quorums).
+> - Derive authorization uses a per-node key derived from a service-held master
+>   (HKDF-SHA256), not one HMAC key shared by every node.
+> - Nodes also persist the audit log (snapshot + journal) and serve the audit
+>   protocol; the node binary is no longer "DKG and derive only".
+> - Still true: no resharing/rotation, no dispute resolution, one host in the
+>   demo, no independent cryptographic review.
+
 ## Crates
 
 - **`quorum_core`** — transport-agnostic DKG state machine (Feldman VSS,
@@ -64,13 +79,12 @@ them:
   this Phase 1 crypto service uses a minimal newline-delimited-JSON wire
   protocol instead, which is enough to prove the mTLS + DKG + derive
   mechanics but isn't the eventual client-facing API shape.
-- **HSM/enclave sealing** of each node's share — currently held in plain
-  process memory (`quorum_core::SecretKeyShare`, whose scalar is overwritten
+- **HSM/enclave sealing** of each node's share — held in process memory (`quorum_core::SecretKeyShare`, whose scalar is overwritten
   with zero on drop -- best effort, no `mlock`, no guarantee against copies
   the compiler made; see roadmap T3-2).
 - **Real access control on derive requests** — implemented in Phase 3, at
   the node rather than in this phase. Every `DeriveRequest` is HMAC-signed
-  with the shared `service_auth_key` over the caller identity, the
+  with the target node's derived key (originally one shared `service_auth_key`) over the caller identity, the
   request's transport public key, and a short expiry, and is replay-checked
   against an in-memory nonce set (`quorum_core::sign_derive_auth` /
   `verify_derive_auth` / `build_derive_request`; see
