@@ -743,6 +743,41 @@ mod tests {
 
 #[cfg(test)]
 mod vote_slot_tests {
+    // F-25 characterisation: documents CURRENT behaviour (see SECURITY_FINDINGS.md).
+    #[test]
+    fn lone_reporter_extends_the_reference_f25() {
+        let mut honest = AuditLog::default();
+        for i in 0..2u64 {
+            let e = honest.propose_next(AuditEvent {
+                invoice_id: format!("i{i}"),
+                actor: "a".into(),
+                action: "x".into(),
+                timestamp_unix_ms: i,
+            });
+            let _ = honest.try_append(e);
+        }
+        let mut liar = honest.clone();
+        let extra = liar.propose_next(AuditEvent {
+            invoice_id: "invented".into(),
+            actor: "mallory".into(),
+            action: "x".into(),
+            timestamp_unix_ms: 9,
+        });
+        let _ = liar.try_append(extra);
+        let mut logs = std::collections::BTreeMap::new();
+        for id in 0..4usize {
+            logs.insert(id, honest.clone());
+        }
+        logs.insert(4, liar);
+        let reference = AuditLog::majority_reference(&logs);
+        // 4 of 5 nodes have 2 entries; the reference still gets a 3rd entry from ONE node.
+        assert_eq!(
+            reference.entries.len(),
+            3,
+            "F-25 fixed? update the finding and this test"
+        );
+    }
+
     use super::*;
 
     const TTL: u64 = 5_000;
