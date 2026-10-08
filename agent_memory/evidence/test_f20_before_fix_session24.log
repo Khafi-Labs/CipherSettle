@@ -1,0 +1,22 @@
+# F-20 failing-first, session 24, base 87f3a17 + counting seam + test only (old persist path). rustc: rustc 1.97.0 (2d8144b78 2026-07-07)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/main.rs (/tmp/t_f20/debug/deps/quorum_node-6b6794875ab84738)
+
+running 1 test
+test audit_store::tests::f20_append_cost_is_independent_of_log_length ... FAILED
+
+failures:
+
+---- audit_store::tests::f20_append_cost_is_independent_of_log_length stdout ----
+
+thread 'audit_store::tests::f20_append_cost_is_independent_of_log_length' (9515) panicked at src/quorum_node/src/audit_store.rs:373:9:
+append #300 wrote 317796 bytes, append #1 wrote 1025: cost grows with log length
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    audit_store::tests::f20_append_cost_is_independent_of_log_length
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 6.38s
+
+error: test failed, to rerun pass `-p quorum_node --bin quorum_node`

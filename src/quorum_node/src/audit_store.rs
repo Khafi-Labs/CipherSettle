@@ -13,6 +13,7 @@
 //!   log") silently discarded audit evidence;
 //! * stale `*.tmp.*` files from a crashed write are ignored and removed.
 
+use quorum_audit::journal;
 use quorum_audit::AuditLog;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -90,6 +91,8 @@ pub fn write_atomic_with(
             .mode(0o600)
             .open(&tmp)?;
         f.write_all(bytes)?;
+        #[cfg(test)]
+        counters::add_bytes(bytes.len() as u64);
         if !hook(Stage::TempWritten) {
             return Err(injected_crash(Stage::TempWritten));
         }
@@ -132,26 +135,133 @@ fn remove_stale_temps(path: &Path) {
     }
 }
 
-/// Missing file => `Ok(empty)` (first start). Present but unreadable,
-/// unparseable, or with an invalid hash chain => `Err` (the node must refuse
-/// to start rather than silently forget its audit history).
+/// Missing snapshot AND journal => `Ok(empty)` (first start). Present but
+/// unreadable, unparseable, damaged, or with an invalid hash chain => `Err`
+/// (the node must refuse to start rather than silently forget its audit
+/// history). The ONE tolerated defect is an incomplete final journal frame (a
+/// write that was never fsynced and so never acknowledged): it is truncated
+/// away here (F-20; policy in `quorum_audit::journal`).
 pub fn load_audit_log(path: &Path) -> Result<AuditLog, AuditStoreError> {
     remove_stale_temps(path);
-    let raw = match std::fs::read(path) {
-        Ok(r) => r,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(AuditLog::default()),
-        Err(e) => return Err(AuditStoreError::Io(e.to_string())),
-    };
-    let log: AuditLog =
-        serde_json::from_slice(&raw).map_err(|e| AuditStoreError::Corrupt(e.to_string()))?;
-    log.verify_chain().map_err(AuditStoreError::ChainInvalid)?;
+    let (log, torn) = journal::load_readonly(path).map_err(map_journal_err)?;
+    if let Some(valid_len) = torn {
+        let jp = journal::journal_path(path);
+        let f = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&jp)
+            .map_err(|e| AuditStoreError::Io(e.to_string()))?;
+        f.set_len(valid_len as u64)
+            .and_then(|()| f.sync_all())
+            .map_err(|e| AuditStoreError::Io(e.to_string()))?;
+    }
     Ok(log)
+}
+
+fn map_journal_err(e: journal::JournalError) -> AuditStoreError {
+    match e {
+        journal::JournalError::Io(m) => AuditStoreError::Io(m),
+        journal::JournalError::Corrupt(m) => AuditStoreError::Corrupt(m),
+        journal::JournalError::ChainInvalid(m) => AuditStoreError::ChainInvalid(m),
+    }
+}
+
+/// Journal size after which the next append compacts into a fresh snapshot.
+pub const COMPACT_AFTER_BYTES: u64 = 4 * 1024 * 1024;
+
+/// F-20: durably append records to the journal: ONE write of whole frames, then
+/// fsync (and fsync of the directory when the file was just created). On a
+/// failed write the file is cut back to its previous length, so a failed append
+/// cannot leave garbage in front of later, acknowledged ones.
+pub fn append_records(path: &Path, records: &[journal::Record]) -> Result<(), AuditStoreError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut buf = Vec::new();
+    for r in records {
+        buf.extend_from_slice(&journal::encode_frame(r).map_err(map_journal_err)?);
+    }
+    let jp = journal::journal_path(path);
+    let dir = match jp.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    let io = |e: std::io::Error| AuditStoreError::Io(e.to_string());
+    std::fs::create_dir_all(&dir).map_err(io)?;
+    let existed = jp.exists();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(&jp)
+        .map_err(io)?;
+    let start = f.metadata().map_err(io)?.len();
+    let written = f.write_all(&buf).and_then(|()| f.sync_all());
+    #[cfg(test)]
+    counters::add_bytes(buf.len() as u64);
+    if let Err(e) = written {
+        // Best effort; the original error is what the caller needs to see.
+        if f.set_len(start).and_then(|()| f.sync_all()).is_err() {
+            eprintln!("[audit_store] could not roll back a failed journal append");
+        }
+        return Err(io(e));
+    }
+    if !existed {
+        sync_dir(&dir).map_err(io)?;
+    }
+    Ok(())
+}
+
+/// Replaces the snapshot with `log` (atomic) and then drops the journal. A crash
+/// between the two steps is safe: replay skips records the snapshot contains.
+pub fn compact(path: &Path, log: &AuditLog) -> Result<(), AuditStoreError> {
+    persist_audit_log(path, log)?;
+    let jp = journal::journal_path(path);
+    match std::fs::remove_file(&jp) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(AuditStoreError::Io(e.to_string())),
+    }
+    if let Some(dir) = jp.parent().filter(|d| !d.as_os_str().is_empty()) {
+        sync_dir(dir).map_err(|e| AuditStoreError::Io(e.to_string()))?;
+    }
+    Ok(())
+}
+
+/// Commits a change: append `records`, then compact into `updated` when the
+/// journal has grown past [`COMPACT_AFTER_BYTES`]. A compaction failure does
+/// not fail the commit (the records are already durable in the journal).
+pub fn commit(
+    path: &Path,
+    records: &[journal::Record],
+    updated: &AuditLog,
+) -> Result<(), AuditStoreError> {
+    append_records(path, records)?;
+    let big = std::fs::metadata(journal::journal_path(path))
+        .map(|m| m.len() > COMPACT_AFTER_BYTES)
+        .unwrap_or(false);
+    if big {
+        if let Err(e) = compact(path, updated) {
+            eprintln!("[audit_store] compaction failed (journal kept, still durable): {e}");
+        }
+    }
+    Ok(())
 }
 
 pub fn persist_audit_log(path: &Path, log: &AuditLog) -> Result<(), AuditStoreError> {
     let json =
         serde_json::to_vec_pretty(log).map_err(|e| AuditStoreError::Corrupt(e.to_string()))?;
     write_atomic(path, &json).map_err(|e| AuditStoreError::Io(e.to_string()))
+}
+
+/// Deterministic test metrics (F-20): bytes handed to the OS by this thread.
+#[cfg(test)]
+pub(crate) mod counters {
+    use std::cell::Cell;
+    thread_local! { static BYTES: Cell<u64> = const { Cell::new(0) }; }
+    pub fn add_bytes(n: u64) {
+        BYTES.with(|b| b.set(b.get() + n));
+    }
+    pub fn bytes() -> u64 {
+        BYTES.with(|b| b.get())
+    }
 }
 
 #[cfg(test)]
@@ -326,5 +436,175 @@ mod tests {
         assert_eq!(names, vec!["audit.json".to_string()], "{names:?}");
         let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    /// F-20: appending one entry must cost O(entry), not O(log). Metric: bytes
+    /// handed to the OS (deterministic; no wall-clock). Mirrors the node's
+    /// persist-then-swap append (clone, try_append, durably commit, swap). Before
+    /// the fix this test called `persist_audit_log` (whole log per append):
+    /// append #300 wrote 317796 bytes vs 1025 for append #1
+    /// (evidence/test_f20_before_fix_session24.log).
+    #[test]
+    fn f20_append_cost_is_independent_of_log_length() {
+        let d = tmpdir();
+        let p = d.join("audit.json");
+        let mut log = AuditLog::default();
+        let mut per_append: Vec<u64> = Vec::new();
+        for i in 0..300usize {
+            let e = log.propose_next(AuditEvent {
+                invoice_id: format!("inv-{i}"),
+                actor: "a".into(),
+                action: format!("act-{i}"),
+                timestamp_unix_ms: i as u64,
+            });
+            let before = counters::bytes();
+            let mut updated = log.clone();
+            updated.try_append(e.clone()).unwrap();
+            commit(&p, &[journal::Record::Append { entry: e }], &updated).unwrap();
+            log = updated;
+            per_append.push(counters::bytes() - before);
+        }
+        let first = per_append[0];
+        let last = per_append[299];
+        let total: u64 = per_append.iter().sum();
+        let file_len = std::fs::metadata(journal::journal_path(&p)).unwrap().len();
+        assert!(
+            last <= 4 * first,
+            "append #300 wrote {last} bytes, append #1 wrote {first}: cost grows with log length"
+        );
+        assert!(
+            total <= 2 * file_len,
+            "write amplification: {total} vs {file_len}"
+        );
+        // And it is really durable and complete.
+        let back = load_audit_log(&p).unwrap();
+        assert_eq!(back.entries.len(), 300);
+        assert_eq!(back.tip_hash(), log.tip_hash());
+    }
+
+    fn append_one(p: &Path, log: &mut AuditLog, i: usize) {
+        let e = log.propose_next(AuditEvent {
+            invoice_id: format!("j{i}"),
+            actor: "a".into(),
+            action: "x".into(),
+            timestamp_unix_ms: i as u64,
+        });
+        let mut updated = log.clone();
+        updated.try_append(e.clone()).unwrap();
+        commit(p, &[journal::Record::Append { entry: e }], &updated).unwrap();
+        *log = updated;
+    }
+
+    #[test]
+    fn torn_journal_tail_is_truncated_and_acknowledged_entries_survive() {
+        let d = tmpdir();
+        let p = d.join("audit.json");
+        let mut log = AuditLog::default();
+        for i in 0..3 {
+            append_one(&p, &mut log, i);
+        }
+        let jp = journal::journal_path(&p);
+        let good_len = std::fs::metadata(&jp).unwrap().len();
+        // A 4th append that died mid-write: garbage-free but incomplete frame.
+        let e = log.propose_next(AuditEvent {
+            invoice_id: "torn".into(),
+            actor: "a".into(),
+            action: "x".into(),
+            timestamp_unix_ms: 9,
+        });
+        let frame = journal::encode_frame(&journal::Record::Append { entry: e }).unwrap();
+        let mut f = std::fs::OpenOptions::new().append(true).open(&jp).unwrap();
+        f.write_all(&frame[..frame.len() / 2]).unwrap();
+        drop(f);
+        let back = load_audit_log(&p).unwrap();
+        assert_eq!(
+            back.entries.len(),
+            3,
+            "the 3 acknowledged entries must survive"
+        );
+        assert_eq!(
+            std::fs::metadata(&jp).unwrap().len(),
+            good_len,
+            "tail truncated"
+        );
+        // A new append after recovery lands cleanly.
+        let mut log2 = back;
+        append_one(&p, &mut log2, 3);
+        assert_eq!(load_audit_log(&p).unwrap().entries.len(), 4);
+    }
+
+    #[test]
+    fn damage_in_the_middle_of_the_journal_is_fatal_not_truncated() {
+        let d = tmpdir();
+        let p = d.join("audit.json");
+        let mut log = AuditLog::default();
+        for i in 0..3 {
+            append_one(&p, &mut log, i);
+        }
+        let jp = journal::journal_path(&p);
+        let mut raw = std::fs::read(&jp).unwrap();
+        raw[20] ^= 0xff;
+        std::fs::write(&jp, &raw).unwrap();
+        assert!(matches!(
+            load_audit_log(&p),
+            Err(AuditStoreError::Corrupt(_))
+        ));
+        assert_eq!(
+            std::fs::read(&jp).unwrap(),
+            raw,
+            "a damaged journal must not be modified"
+        );
+    }
+
+    #[test]
+    fn signature_merges_are_journaled_and_replayed() {
+        let d = tmpdir();
+        let p = d.join("audit.json");
+        let mut log = AuditLog::default();
+        append_one(&p, &mut log, 0);
+        let mut updated = log.clone();
+        updated.merge_signature(0, 3, vec![9, 9]).unwrap();
+        commit(
+            &p,
+            &[journal::Record::Sig {
+                seq: 0,
+                node_id: 3,
+                sig: vec![9, 9],
+            }],
+            &updated,
+        )
+        .unwrap();
+        let back = load_audit_log(&p).unwrap();
+        assert_eq!(back.entries[0].signatures.get(&3), Some(&vec![9, 9]));
+    }
+
+    #[test]
+    fn compaction_keeps_the_log_and_a_crash_before_journal_removal_is_harmless() {
+        let d = tmpdir();
+        let p = d.join("audit.json");
+        let mut log = AuditLog::default();
+        for i in 0..5 {
+            append_one(&p, &mut log, i);
+        }
+        // Simulate the crash window: new snapshot renamed in, journal still there.
+        persist_audit_log(&p, &log).unwrap();
+        assert!(journal::journal_path(&p).exists());
+        assert_eq!(load_audit_log(&p).unwrap().entries.len(), 5);
+        // Real compaction removes the journal and keeps the content.
+        compact(&p, &log).unwrap();
+        assert!(!journal::journal_path(&p).exists());
+        assert_eq!(load_audit_log(&p).unwrap().tip_hash(), log.tip_hash());
+        // Appends continue after compaction.
+        append_one(&p, &mut log, 5);
+        assert_eq!(load_audit_log(&p).unwrap().entries.len(), 6);
+    }
+
+    #[test]
+    fn a_failed_journal_append_leaves_no_garbage_and_reports_the_error() {
+        let d = tmpdir();
+        let blocker = d.join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        let r = append_records(&blocker.join("audit.json"), &[]);
+        assert!(matches!(r, Err(AuditStoreError::Io(_))));
     }
 }

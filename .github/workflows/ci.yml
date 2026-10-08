@@ -152,7 +152,7 @@ jobs:
         run: cargo run --locked -p quorum_adversarial -- --only A,B,C,D,M,L,E,I,F,G,J,K,N,Z,P,Q,R,S,T,W | tee adversarial.log
       - name: Require the full expected check count
         run: |
-          grep -q '^80/80 checks passed as expected\.' adversarial.log
+          grep -q '^82/82 checks passed as expected\.' adversarial.log
           ! grep -q '^\[FAIL\]' adversarial.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
