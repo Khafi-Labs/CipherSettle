@@ -70,7 +70,7 @@ It runs the pin assertion, dependency-pin policy, fuzz setup checks, fmt,
 clippy, fuzz crate type-check, build, all unit tests (DB required), the
 DB-really-ran assertion, the broken-DB negative test and the adversarial suite
 (must be exactly 82/82). It does not run: GitHub Actions, cargo audit/deny,
-fuzzing, the orchestrator, power-loss or the Test E campaign. Extra local
+fuzzing, power-loss or the Test E campaign (the orchestrator end to end IS a step since session 26). Extra local
 checks:
 
 ```bash

@@ -154,6 +154,10 @@ jobs:
         run: |
           grep -q '^82/82 checks passed as expected\.' adversarial.log
           ! grep -q '^\[FAIL\]' adversarial.log
+      - name: Orchestrator end to end (phases 1-3, catches regressions the adversarial suite does not; UNVERIFIED on GitHub)
+        run: |
+          cargo run --locked -p quorum_orchestrator | tee orchestrator.log
+          grep -q 'Phase 3 exit-criteria demo complete' orchestrator.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

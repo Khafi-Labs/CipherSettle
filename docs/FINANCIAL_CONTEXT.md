@@ -54,7 +54,7 @@ Three properties, which are easy to conflate and are worth separating:
 |---|---|---|---|
 | 1 | **Per-invoice, revocable access** | The issuer grants a named financier access to one invoice and can withdraw it | Implemented (`grant_settlement_access` / `revoke_settlement_access`) |
 | 2 | **No standing master key** | No party — including the operator — holds a key capable of decrypting all invoices | Implemented and demonstrated: the derived key exists only as a `(t+1)`-of-`n` threshold, and each node's partial is sealed to the caller's transport key |
-| 3 | **Tamper-evident access history** | Every access event is recorded in a hash-chained, node-co-signed log. A tampered copy is detectable by reconciliation (`AuditLog::diverges_from`) and the root hash can be anchored with the separate notary | Implemented as LIBRARY capability, **not as an automatic running process**: nothing in `quorum_service`, `quorum_node` or `quorum_notary` runs reconciliation or submits root hashes; only the orchestrator demo and the adversarial suite do (F-24). Open hazards: the vote-TTL split-quorum risk (R-2) and a lone-reporter weakness in the majority reference (F-25) |
+| 3 | **Tamper-evident access history** | Every access event is recorded in a hash-chained, node-co-signed log. A tampered copy is detectable by reconciliation (`AuditLog::diverges_from`) and the root hash can be anchored with the separate notary | Implemented as LIBRARY capability, **not as an automatic running process**: nothing in `quorum_service`, `quorum_node` or `quorum_notary` runs reconciliation or submits root hashes; only the orchestrator demo and the adversarial suite do (F-24). Open hazards: the vote-TTL split-quorum risk (R-2) and a lone-reporter weakness in the majority reference (F-25, open) |
 
 Two confidentiality claims must also be kept apart, because they have
 different strength:
@@ -157,7 +157,8 @@ The specific properties that matter for a financing arrangement:
    contribute a forged partial that survives aggregation. A dishonest node is
    excluded and identified, not believed. (The service verifies those proofs
    by default; a test-only flag, `insecure_skip_share_proofs`, can disable the
-   check and nothing refuses it outside tests, F-28. The proof system has not
+   check but the service refuses it without an explicit environment
+   acknowledgement, F-28 fixed in session 26. The proof system has not
    been reviewed by a cryptographer.)
 4. **Revocation is immediate and independent of settlement.** The issuer's
    `revoke` call is effective at once, with no dependency on the financier
@@ -275,7 +276,7 @@ What changes for the parties, in practice:
 |---|---|
 | Can any one party read every invoice? | No. There is no standing key; reading one invoice needs a `t+1`-of-`n` threshold, and each partial is sealed to the end caller's transport key |
 | Can the operator read invoices? | No, by construction — verified in source and by adversarial tests, not merely asserted |
-| Can the operator quietly change or delete the access history? | Not undetectably, IF someone runs the checks. The log is hash-chained and co-signed by the nodes; reconciliation by majority vote and anchoring with a separate notary exist as tools but are not run automatically (F-24), and the majority vote has a lone-reporter weakness (F-25). Residual risk: a colluding majority of nodes, the open vote-TTL split-quorum hazard (R-2), and nobody is alerted unless an operator runs the check |
+| Can the operator quietly change or delete the access history? | Not undetectably, IF someone runs the checks. The log is hash-chained and co-signed by the nodes; reconciliation by majority vote and anchoring with a separate notary exist as tools but are not run automatically (F-24), and the majority vote has a lone-reporter weakness (F-25, open). Residual risk: a colluding majority of nodes, the open vote-TTL split-quorum hazard (R-2), and nobody is alerted unless an operator runs the check |
 | Is there key escrow? | No |
 | What happens if one node is compromised? | It learns nothing about any invoice key on its own, and a forged partial is rejected and the node identified by the NIZK gate. Two compromised nodes are still below the 3-of-5 threshold |
 | What if three nodes collude? | They meet the threshold. This is the fundamental assumption of the construction, not a defect, and the reason external notarization exists as a check that does not depend on the quorum's honesty |

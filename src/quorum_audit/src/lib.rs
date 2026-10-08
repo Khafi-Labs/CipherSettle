@@ -337,6 +337,10 @@ impl AuditLog {
             else {
                 break 'seq; // unreachable in practice: votes is non-empty
             };
+            // F-25 (OPEN): this is a majority of the replicas that HAVE an entry here, so
+            // a lone reporter can extend the reference. Counting all replicas instead
+            // was tried and REJECTED: it stops the orchestrator demo from catching a
+            // tampered node (only 2 honest copies of 5), see SECURITY_FINDINGS.md.
             if winning_count * 2 <= votes.len() {
                 // No strict majority at this seq -- stop extending the
                 // reference here rather than guessing; reconciliation
@@ -743,7 +747,7 @@ mod tests {
 
 #[cfg(test)]
 mod vote_slot_tests {
-    // F-25 characterisation: documents CURRENT behaviour (see SECURITY_FINDINGS.md).
+    // F-25 characterisation: documents CURRENT behaviour (finding is OPEN).
     #[test]
     fn lone_reporter_extends_the_reference_f25() {
         let mut honest = AuditLog::default();

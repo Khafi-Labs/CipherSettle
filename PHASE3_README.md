@@ -21,8 +21,8 @@ Implements the Phase 3 exit criteria of the project's original phased roadmap (t
 >   (with per-route request/error/latency series).
 > - Known gaps: `GET /audit-log` and `GET /invoices/:id/merkle-proof` require no
 >   credentials (F-26); the service reaches Postgres over plain TCP (F-27); the
->   test-only `insecure_skip_share_proofs` flag is not refused outside tests
->   (F-28).
+>   test-only `insecure_skip_share_proofs` flag now needs an explicit
+>   environment acknowledgement (F-28, fixed in session 26).
 > - Audit entries are never reconciled or notarized by the running service
 >   (F-24).
 

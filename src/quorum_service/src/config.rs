@@ -95,3 +95,49 @@ pub struct ServiceConfig {
     #[serde(default)]
     pub acknowledge_pre_cutover_data: bool,
 }
+
+/// Environment variable that must hold exactly [`INSECURE_TEST_FLAGS_ACK`] for the
+/// service to honour a test-only insecure flag (F-28).
+pub const INSECURE_TEST_FLAGS_ENV: &str = "CIPHERSETTLE_ALLOW_INSECURE_TEST_FLAGS";
+pub const INSECURE_TEST_FLAGS_ACK: &str = "i-understand-this-disables-security-checks";
+
+/// Refuses `insecure_skip_share_proofs` unless the process environment carries the
+/// explicit acknowledgement. A config file alone can no longer silently turn the
+/// sealed-share NIZK check off in a deployment.
+pub fn check_insecure_flags(
+    skip_share_proofs: bool,
+    env_value: Option<&str>,
+) -> Result<(), String> {
+    if skip_share_proofs && env_value != Some(INSECURE_TEST_FLAGS_ACK) {
+        return Err(format!(
+            "insecure_skip_share_proofs is set but {INSECURE_TEST_FLAGS_ENV} does not carry the \
+             test acknowledgement. This flag disables sealed-share NIZK verification and exists \
+             only for the adversarial suite; refusing to start."
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod insecure_flag_tests {
+    use super::*;
+
+    #[test]
+    fn skip_proofs_is_refused_without_the_explicit_test_acknowledgement() {
+        assert!(check_insecure_flags(true, None).is_err());
+        assert!(check_insecure_flags(true, Some("")).is_err());
+        assert!(check_insecure_flags(true, Some("0")).is_err());
+        assert!(check_insecure_flags(true, Some("true")).is_err());
+    }
+
+    #[test]
+    fn skip_proofs_is_accepted_only_with_the_exact_acknowledgement() {
+        assert!(check_insecure_flags(true, Some(INSECURE_TEST_FLAGS_ACK)).is_ok());
+    }
+
+    #[test]
+    fn nothing_is_required_when_the_flag_is_off() {
+        assert!(check_insecure_flags(false, None).is_ok());
+        assert!(check_insecure_flags(false, Some("anything")).is_ok());
+    }
+}

@@ -82,7 +82,7 @@ This document maintains the architectural decision records (ADRs) for the crypto
 
 **IMPLEMENTATION:** `quorum_vetseal::nizk`, wired into the live protocol: `quorum_node` emits a proof for every partial it sends (`quorum_core::seal_partial_with_proof`), and `quorum_client` verifies each node's proof before combining (`quorum_core::verify_sealed_partial`).
 
-**KNOWN LIMITATIONS:** The service can be configured to skip the proof check (`insecure_skip_share_proofs`, test-only; it logs a warning and nothing refuses it outside tests: F-28). Does **not** bind a `pk_share` to a node index by itself — the caller must independently confirm the presented `PublicKeyShare` matches `PublicKeySet::public_key_share(node_id)` from the DKG's own public commitment. The live path satisfies this: `verify_sealed_partial` re-derives the expected public key share from the group's own Feldman commitment rather than accepting the node's value. The proof system itself has **not** been reviewed by a qualified cryptographer — see `SECURITY_REVIEW.md` §6.B.
+**KNOWN LIMITATIONS:** The service can be configured to skip the proof check (`insecure_skip_share_proofs`, test-only; since session 26 the service refuses it unless `CIPHERSETTLE_ALLOW_INSECURE_TEST_FLAGS` carries an explicit acknowledgement: F-28, unit-tested). Does **not** bind a `pk_share` to a node index by itself — the caller must independently confirm the presented `PublicKeyShare` matches `PublicKeySet::public_key_share(node_id)` from the DKG's own public commitment. The live path satisfies this: `verify_sealed_partial` re-derives the expected public key share from the group's own Feldman commitment rather than accepting the node's value. The proof system itself has **not** been reviewed by a qualified cryptographer — see `SECURITY_REVIEW.md` §6.B.
 
 ---
 
@@ -120,7 +120,7 @@ This document maintains the architectural decision records (ADRs) for the crypto
 
 **SECURITY PROPERTY:** A party holding only the mTLS client certificate, without also holding a node's derived key, cannot construct a valid `DeriveRequest` for that node. A leaked derived key authorizes requests to THAT node only (below the `t+1` partials needed). A captured, valid `DeriveRequest` cannot be replayed after its expiry or after first use. Binding `transport_public_key` into the MAC prevents a party on the service-to-node hop from redirecting a sealed result to a transport key of their own.
 
-**ASSUMPTIONS:** The service-held MASTER secret remains a single point of compromise: whoever holds it can authorize derivations on every node (THREAT_MODEL T-4). Removing that needs protocol-level change (Gap 3 step 2) which is `NEEDS_HUMAN_CRYPTO_REVIEW` and NOT done. No key rotation or versioning exists. READ: the node-side doc comment on `NodeConfig::service_auth_key_b64` still describes the old shared key (F-29).
+**ASSUMPTIONS:** The service-held MASTER secret remains a single point of compromise: whoever holds it can authorize derivations on every node (THREAT_MODEL T-4). Removing that needs protocol-level change (Gap 3 step 2) which is `NEEDS_HUMAN_CRYPTO_REVIEW` and NOT done. No key rotation or versioning exists. The doc comment on `NodeConfig::service_auth_key_b64` was corrected in session 26 (F-29).
 
 **IMPLEMENTATION:** `quorum_core::{sign_derive_auth, verify_derive_auth, build_derive_request, MAX_DERIVE_AUTH_WINDOW_MS}`; integrated into `quorum_node`.
 

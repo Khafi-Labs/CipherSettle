@@ -1363,6 +1363,16 @@ async fn main() {
         .map(|k| ApiKeyEntry::new(&k.key, k.caller_id.clone()))
         .collect();
 
+    or_fatal(
+        "service",
+        "insecure test flags",
+        config::check_insecure_flags(
+            config.insecure_skip_share_proofs,
+            std::env::var(config::INSECURE_TEST_FLAGS_ENV)
+                .ok()
+                .as_deref(),
+        ),
+    );
     let http_metrics = Arc::new(http_metrics::HttpMetrics::new());
     let state = Arc::new(AppState {
         db: db_pool,

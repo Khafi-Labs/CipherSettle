@@ -2681,6 +2681,10 @@ async fn test_j_sealed_share_retry_protocol(report: &mut Report) {
     std::fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
     let mut service_child = Command::new(&service_binary)
         .arg(&config_path)
+        .env(
+            "CIPHERSETTLE_ALLOW_INSECURE_TEST_FLAGS",
+            "i-understand-this-disables-security-checks",
+        )
         .spawn()
         .unwrap();
 

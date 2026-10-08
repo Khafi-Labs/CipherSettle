@@ -11,7 +11,8 @@ set -euo pipefail
 export PGHOST="${PGHOST:-127.0.0.1}" PGPORT="${PGPORT:-5432}" PGUSER="${PGUSER:-postgres}"
 export PGPASSWORD="${PGPASSWORD:-ciphersettle_dev}"
 
-for db in ciphersettle_test ciphersettle_adversarial; do
+#   ciphersettle_phase3       quorum_orchestrator end-to-end demo (phases 1-3)
+for db in ciphersettle_test ciphersettle_adversarial ciphersettle_phase3; do
   if [ "$(psql -tAqc "SELECT 1 FROM pg_database WHERE datname='${db}'" postgres)" = "1" ]; then
     echo "exists:  ${db}"
   else

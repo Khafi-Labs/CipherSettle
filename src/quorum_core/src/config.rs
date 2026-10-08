@@ -50,7 +50,9 @@ pub struct NodeConfig {
     /// `Keypair::to_bytes()` (64 bytes: 32-byte secret + 32-byte public).
     pub audit_keypair_b64: String,
     /// Base64 of the shared HMAC key known only to `quorum_service` and
-    /// every quorum node -- deliberately NOT the mTLS client cert, which
+    /// every quorum node (the per-node key derived from the service's master
+    /// secret via `derive_node_auth_key`, Gap 3 step 1; originally one key shared
+    /// by all nodes) -- deliberately NOT the mTLS client cert, which
     /// Phase 4 Test C proved is not a sufficient authorization boundary
     /// (it's shared with, and effectively as powerful as, every other
     /// direct caller of the raw node protocol). Every `DeriveRequest` must

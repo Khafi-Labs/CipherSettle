@@ -14,8 +14,9 @@ Implements the Phase 2 exit criteria of the project's original phased roadmap (t
 >   notarize on their own, so a deployed system does not detect a rewritten log
 >   by itself (finding F-24).
 > - `AuditLog::majority_reference` counts votes only among replicas that HAVE an
->   entry at a sequence, so a single replica with a longer log extends the
->   reference (F-25, pinned by a unit test).
+>   entry at a sequence, so one replica with a longer log extends the reference
+>   (F-25, OPEN, pinned by a unit test; a simple fix was tried in session 26 and
+>   reverted because it broke this demo's tamper detection).
 > - Nodes now persist the log as an atomic snapshot plus an append-only journal,
 >   acknowledge an entry only after it is durable (`AuditEntryCommitted`, F-19)
 >   and use a two-phase vote/replicate protocol; the notary's receipt file is

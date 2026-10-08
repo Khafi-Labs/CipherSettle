@@ -1,0 +1,14 @@
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+
+     Running tests/db_pool_concurrency.rs (/tmp/t197/debug/deps/db_pool_concurrency-fdd9c7623ca2c0e5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/migrations.rs (/tmp/t197/debug/deps/migrations-bf1d85d3cbce7c63)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
