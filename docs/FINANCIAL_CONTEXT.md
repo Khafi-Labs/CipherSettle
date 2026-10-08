@@ -4,9 +4,12 @@ This document is for reviewers who need to answer "what is this actually for
 in a financial context?" without reading the cryptographic sources first. It
 describes the commercial problem, the actors, the invoice lifecycle as
 actually implemented, the use cases the design supports, and — just as
-importantly — the use cases it does **not** support. Every claim here is
-traceable to code; §12 maps each one to the file, symbol, or test that backs
-it.
+importantly — the use cases it does **not** support. Claims are meant to
+be traceable to code; §12 maps them to the file, symbol, or test that backs
+them. **Session 25 read this document line by line against the code (commit
+766c1a4) and corrected the statements that were stale; the legal, regulatory
+and commercial assertions are UNVERIFIED by any engineering check and none of
+this is legal advice.**
 
 It does not repeat the security posture. That is `SECURITY_REVIEW.md`,
 `docs/security/THREAT_MODEL.md`, and `CipherSettle_Audit_Remediation_Roadmap.md`.
@@ -51,7 +54,7 @@ Three properties, which are easy to conflate and are worth separating:
 |---|---|---|---|
 | 1 | **Per-invoice, revocable access** | The issuer grants a named financier access to one invoice and can withdraw it | Implemented (`grant_settlement_access` / `revoke_settlement_access`) |
 | 2 | **No standing master key** | No party — including the operator — holds a key capable of decrypting all invoices | Implemented and demonstrated: the derived key exists only as a `(t+1)`-of-`n` threshold, and each node's partial is sealed to the caller's transport key |
-| 3 | **Tamper-evident access history** | Every access event is recorded in a log that a single party cannot rewrite, and is externally notarized | Implemented, with one open hazard (the vote-TTL split-quorum risk, `SECURITY_REVIEW.md` R-2) |
+| 3 | **Tamper-evident access history** | Every access event is recorded in a hash-chained, node-co-signed log. A tampered copy is detectable by reconciliation (`AuditLog::diverges_from`) and the root hash can be anchored with the separate notary | Implemented as LIBRARY capability, **not as an automatic running process**: nothing in `quorum_service`, `quorum_node` or `quorum_notary` runs reconciliation or submits root hashes; only the orchestrator demo and the adversarial suite do (F-24). Open hazards: the vote-TTL split-quorum risk (R-2) and a lone-reporter weakness in the majority reference (F-25) |
 
 Two confidentiality claims must also be kept apart, because they have
 different strength:
@@ -62,8 +65,11 @@ different strength:
   only ever hold sealed shares. Operating the infrastructure does not confer
   the ability to read it.
 - **From other participants** — weaker, and this is the prototype's central
-  open gap. Authorization is decided inside this system, against a shared HMAC
-  secret between the service and the nodes. There is **no** signature from an
+  open gap. Authorization is decided inside this system: the service holds a master
+  HMAC secret and each node verifies requests with a key derived from it
+  (per-node HKDF keys, Gap 3 step 1). A leaked node key no longer authorizes
+  requests on other nodes, but the master at the service still authorizes
+  derivations on every node (THREAT_MODEL T-4). There is **no** signature from an
   external authority — the FRA, e-Finance, or anyone else — that a node
   verifies. So today the system proves *who within the platform* accessed
   what; it does not yet prove *that an external authority had approved* it.
@@ -92,9 +98,14 @@ number entitled to it.
 
 ## 4. The invoice lifecycle as implemented
 
-Every state-changing action below is written to the audit log *before* its
-effect is observable to the caller, through a hash-chained, multi-node
-co-signed entry that a separate notary process then anchors.
+Audit ordering, as implemented: **derive** is audit-first and fail-closed (the
+key is not released unless the audit entry commits; 503 otherwise). The other
+state-changing actions commit their database change and an `audit_outbox` row
+in ONE transaction and are then appended to the quorum log; if the quorum is
+unavailable the call returns 202 "pending" and a background drainer retries
+(at-least-once, so duplicate entries are possible; F-13/F-14). Entries are
+hash-chained and co-signed by the nodes; anchoring with the separate notary
+is NOT automatic (F-24).
 
 | Step | Endpoint (`quorum_service`) | Authorized caller | Audit action string | Financial meaning |
 |---|---|---|---|---|
@@ -105,7 +116,7 @@ co-signed entry that a separate notary process then anchors.
 | Settle | `POST /invoices/:id/settle` | Issuer or granted financier | `invoice_settled` | Records that the receivable was settled. **Money does not move here** — this is a terminal-state marker for retention and pruning eligibility |
 | Prune | `POST /invoices/:id/prune` | Anyone, gated by eligibility | `ciphertext_pruned` | Ciphertext may be deleted once settled **and** past the retention window. The audit log is never pruned |
 | Regulator | `POST /regulators`, `DELETE /regulators/:id` | Admin only | — | Grants or removes the supervisory role |
-| Inspect | `GET /audit-log`, `GET /invoices/:id/merkle-proof` | Provisioned caller | — | The compliance artifact: who did what, in order, and a Merkle inclusion proof that a given invoice's commitment is in the log |
+| Inspect | `GET /audit-log`, `GET /invoices/:id/merkle-proof` | **Nobody is checked: these two endpoints take no credentials** (F-26; `/audit-log` also reads one node's replica only) | — | The compliance artifact: who did what, in order, and a Merkle inclusion proof that a given invoice's commitment is in the log |
 
 Two honest qualifications on that table:
 
@@ -144,7 +155,10 @@ The specific properties that matter for a financing arrangement:
    required, and each sealed share carries a non-interactive zero-knowledge
    proof binding it to that node's own DKG share, no single node can
    contribute a forged partial that survives aggregation. A dishonest node is
-   excluded and identified, not believed.
+   excluded and identified, not believed. (The service verifies those proofs
+   by default; a test-only flag, `insecure_skip_share_proofs`, can disable the
+   check and nothing refuses it outside tests, F-28. The proof system has not
+   been reviewed by a cryptographer.)
 4. **Revocation is immediate and independent of settlement.** The issuer's
    `revoke` call is effective at once, with no dependency on the financier
    cooperating or on an invoice reaching a terminal state.
@@ -261,16 +275,16 @@ What changes for the parties, in practice:
 |---|---|
 | Can any one party read every invoice? | No. There is no standing key; reading one invoice needs a `t+1`-of-`n` threshold, and each partial is sealed to the end caller's transport key |
 | Can the operator read invoices? | No, by construction — verified in source and by adversarial tests, not merely asserted |
-| Can the operator quietly change or delete the access history? | No single party can. The log is hash-chained, co-signed by the nodes, reconciled by majority vote, and anchored by a separate notary identity. Residual risk: a colluding majority of reporting nodes, and the open vote-TTL split-quorum hazard (R-2) |
+| Can the operator quietly change or delete the access history? | Not undetectably, IF someone runs the checks. The log is hash-chained and co-signed by the nodes; reconciliation by majority vote and anchoring with a separate notary exist as tools but are not run automatically (F-24), and the majority vote has a lone-reporter weakness (F-25). Residual risk: a colluding majority of nodes, the open vote-TTL split-quorum hazard (R-2), and nobody is alerted unless an operator runs the check |
 | Is there key escrow? | No |
 | What happens if one node is compromised? | It learns nothing about any invoice key on its own, and a forged partial is rejected and the node identified by the NIZK gate. Two compromised nodes are still below the 3-of-5 threshold |
 | What if three nodes collude? | They meet the threshold. This is the fundamental assumption of the construction, not a defect, and the reason external notarization exists as a check that does not depend on the quorum's honesty |
 | What if a node's share leaks permanently? | It is fixed for the process lifetime; **rotation and resharing are not implemented**. This is a genuine commercial blocker for long-lived production use |
-| What happens on a full restart? | A full-quorum restart runs a new DKG and produces a **new group key**, which makes previously-issued ciphertexts unrecoverable. Also unimplemented, also commercial-blocking |
+| What happens on a full restart? | With share persistence (Gap 1, **pilot tier**) a restarted node reloads its envelope-encrypted share and the quorum keeps the SAME group key (adversarial group P, EXECUTED); the key-encryption key is a local 0600 file, not a KMS/HSM. A node without persistence configured refuses to start unless `allow_ephemeral_share` is set (test quorums). If share files or their keys are lost, the group key is lost and previously-issued ciphertexts are unrecoverable; node-tier backup/restore is not rehearsed. Resharing and rotation remain unimplemented |
 | Is the cryptography reviewed? | No independent peer review has been performed. `SECURITY_REVIEW.md` §6 lists exactly what a reviewer should examine. This is the largest gap in the assurance case |
 | Is the system compliant with data-protection or cybersecurity requirements? | No assessment has been performed. Legal, data-protection and compliance questions require qualified Egyptian counsel |
 | How long is data retained? | Ciphertext is prunable once the invoice is settled and past the retention window; the audit log is append-only and never pruned. Both policies are configurable |
-| What is the availability/recovery story? | A derivation needs a reachable threshold of nodes. Backup and disaster recovery of node state and the Postgres instance are not designed in this repository |
+| What is the availability/recovery story? | A derivation needs a reachable threshold of nodes. Partial pieces exist: a Postgres backup/restore rehearsal script (run on toy data only), versioned migrations, a Dockerfile (never built), `/healthz`, `/readyz` and `/metrics`, and runbooks that have never been drilled. There is no deployment manifest, no point-in-time recovery, no rehearsed node-tier restore, and no multi-host deployment (`docs/PRODUCTION_READINESS.md`, `deploy/README.md`) |
 
 ## 11. What would have to be true before this could carry real financing
 
@@ -286,8 +300,8 @@ not on the cryptography alone. Summarised here in the order that blocks:
    invoice's key. Until this exists, node lifecycle management is a genuine
    operational hazard rather than a routine task.
 3. **`VerificationAttestation`.** Nodes must independently verify a
-   signed result from an external authority, rather than trusting a shared HMAC
-   secret. This is what would make "access is conditioned on a regulator's
+   signed result from an external authority, rather than trusting an HMAC secret
+   held by the service. This is what would make "access is conditioned on a regulator's
    verified result" a claim rather than an aspiration — and it depends on an
    external system exposing something consumable, which is unconfirmed.
 4. **Governance and operator separation.** Who runs the nodes, on what
@@ -297,13 +311,16 @@ not on the cryptography alone. Summarised here in the order that blocks:
    of whether operating such an infrastructure is itself a regulated activity.
    Requires qualified Egyptian counsel; none has been engaged.
 6. **Hardware protection of node shares** (HSM or equivalent). Shares are held
-   in plain process memory today, zeroized on drop on a best-effort basis.
+   in process memory (zeroized on drop, best effort) and, in the pilot tier,
+   stored at rest in an AES-256-GCM envelope file whose key sits in a local
+   file; there is no KMS/HSM `KekProvider`.
 7. **Resolving the vote-TTL split-quorum hazard** (R-2) before more than one
    service replica is deployed.
 8. **An integration layer** to a real platform: a ledger, identity, and a
    production key-management and certificate story.
 9. **A formal operational runbook** — node provisioning, DKG ceremonies,
-   monitoring, and incident response.
+   monitoring, and incident response. Drafts exist for share persistence and
+   the audit backlog (`docs/RUNBOOK_*.md`); none has been drilled.
 
 Two layers sit outside this repository entirely and are not code work at all:
 the **integration design** (a verification hook into the regulator's own
@@ -325,9 +342,9 @@ A reviewer who wants to check any statement above against code:
 | A key needs a threshold of nodes and no single node can reconstruct it | `src/quorum_core/src/bls.rs`; `src/quorum_poc/README.md` (Phase 0 PoC) |
 | Bad shares and wrong-degree commitments are rejected | `src/quorum_core/src/bls.rs` (`receive_commitment`) |
 | A forged partial is excluded before aggregation | `src/quorum_core/src/bls.rs` (`verify_sealed_partial`), `src/quorum_vetseal/src/nizk.rs`, adversarial group M |
-| Every action is logged before its effect is observable | `src/quorum_service/src/main.rs` (`log_audit_event` call order) |
+| Derive is audit-first and fail-closed; other actions use the transactional outbox | `src/quorum_service/src/main.rs` (`derive_invoice_key`, `audit_outbox_commit`, the outbox drainer) |
 | One party cannot rewrite the log | `src/quorum_audit/src/lib.rs` (`try_append`, `majority_reference`, `diverges_from`) |
-| The log is anchored outside the quorum's control | `src/quorum_notary/`, `NotarizationReceipt` in `src/quorum_audit/src/lib.rs` |
+| The notary can sign and store receipts for root hashes it is sent (NOT automatic) | `src/quorum_notary/`, `NotarizationReceipt` in `src/quorum_audit/src/lib.rs`, `quorum_client::notarize` (called only by the orchestrator demo, F-24) |
 | Access control is policy-gated per invoice | `src/ciphersettle_core/src/lib.rs` (`resolve_access`, `grant_settlement_access`, `revoke_settlement_access`) |
 | Revocation is immediate and independent of settlement | `src/ciphersettle_core/src/lib.rs` (`revoke_settlement_access`) |
 | The nullifier check is not a double-financing determination | `src/ciphersettle_core/src/lib.rs`, and the 409 message string in `src/quorum_service/src/main.rs` |
