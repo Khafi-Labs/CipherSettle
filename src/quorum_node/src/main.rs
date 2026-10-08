@@ -968,15 +968,26 @@ async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
                 // Persist-then-swap: the in-memory log only changes after the
                 // new state is durable, so memory never runs ahead of disk.
                 let mut updated = (*log).clone();
+                let mut sig_records = Vec::new();
                 for (id, sig) in entry.signatures {
-                    if valid_ids.contains(&id) {
-                        let _ = updated.merge_signature(seq, id, sig);
+                    if valid_ids.contains(&id)
+                        && updated.merge_signature(seq, id, sig.clone()).is_ok()
+                    {
+                        sig_records.push(quorum_audit::journal::Record::Sig {
+                            seq,
+                            node_id: id,
+                            sig,
+                        });
                     }
                 }
                 // Whether or not merging the extra signatures could be persisted,
                 // the entry itself is already durable here (the in-memory log
                 // only ever holds durable state), so this node can acknowledge.
-                match audit_store::persist_audit_log(Path::new(&shared.audit_log_file), &updated) {
+                match audit_store::commit(
+                    Path::new(&shared.audit_log_file),
+                    &sig_records,
+                    &updated,
+                ) {
                     Ok(()) => *log = updated,
                     Err(e) => eprintln!(
                         "[node {}] could not persist merged signatures for seq {seq}: {e}; keeping the previous (durable) state",
@@ -996,11 +1007,16 @@ async fn handle_message(shared: &Arc<Shared>, msg: Message) -> Option<Message> {
             // fails the node does NOT claim the entry (it keeps its last
             // durable state and its pending vote) and says so loudly.
             let mut updated = (*log).clone();
+            let journal_entry = entry.clone();
             match updated.try_append(entry) {
                 Ok(()) => {
-                    if let Err(e) =
-                        audit_store::persist_audit_log(Path::new(&shared.audit_log_file), &updated)
-                    {
+                    if let Err(e) = audit_store::commit(
+                        Path::new(&shared.audit_log_file),
+                        &[quorum_audit::journal::Record::Append {
+                            entry: journal_entry,
+                        }],
+                        &updated,
+                    ) {
                         eprintln!(
                             "[node {}] PERSIST FAILED for audit entry seq {seq}: {e}; entry NOT committed on this node",
                             shared.node_id

@@ -1,0 +1,2 @@
+test audit_store::tests::torn_journal_tail_is_truncated_and_acknowledged_entries_survive ... FAILED
+test result: FAILED. 14 passed; 1 failed; 0 ignored; 0 measured; 32 filtered out; finished in 1.21s

@@ -1600,11 +1600,8 @@ async fn test_t_secret_files(report: &mut Report) {
 // durable on any node at the instant of a kill. Q1 therefore polls until all
 // nodes hold the entries before killing.
 fn q_read_log(nodes: &PNodes, id: usize) -> Result<quorum_audit::AuditLog, String> {
-    let raw = std::fs::read(nodes.path("audit_log.json", id)).map_err(|e| format!("read: {e}"))?;
-    let log: quorum_audit::AuditLog =
-        serde_json::from_slice(&raw).map_err(|e| format!("parse: {e}"))?;
-    log.verify_chain()?;
-    Ok(log)
+    // F-20: the node persists snapshot + append-only journal; read both.
+    quorum_audit::journal::load_log(&nodes.path("audit_log.json", id)).map_err(|e| format!("{e}"))
 }
 
 async fn test_q_audit_log_durability(report: &mut Report) {
@@ -1749,7 +1746,28 @@ async fn test_q_audit_log_durability(report: &mut Report) {
     kill_all(&mut children);
 
     // ---- Q4-Q6: damaged log => refuse to start, never start empty ----
-    let valid = std::fs::read(nodes.path("audit_log.json", 1)).unwrap_or_default();
+    // F-20: node 1's state may live partly in the journal; materialise the full log
+    // as one snapshot file (the damaged-snapshot cases below then apply to it).
+    let valid = quorum_audit::journal::load_log(&nodes.path("audit_log.json", 1))
+        .ok()
+        .and_then(|l| serde_json::to_vec_pretty(&l).ok())
+        .unwrap_or_default();
+    // Frames for node 1's entries, captured BEFORE Q5 overwrites node 1's files.
+    let full_log = quorum_audit::journal::load_log(&nodes.path("audit_log.json", 1)).ok();
+    let frames: Vec<Vec<u8>> = full_log
+        .as_ref()
+        .map(|l| {
+            l.entries
+                .iter()
+                .filter_map(|e| {
+                    quorum_audit::journal::encode_frame(&quorum_audit::journal::Record::Append {
+                        entry: e.clone(),
+                    })
+                    .ok()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let mut tampered: serde_json::Value =
         serde_json::from_slice(&valid).unwrap_or(serde_json::Value::Null);
     if let Some(a) = tampered["entries"][1]["event"].get_mut("action") {
@@ -1778,6 +1796,9 @@ async fn test_q_audit_log_durability(report: &mut Report) {
     for (name, id, bytes, _) in cases {
         nodes.clear_outputs(id);
         std::fs::write(nodes.path("audit_log.json", id), &bytes).unwrap();
+        let _ = std::fs::remove_file(quorum_audit::journal::journal_path(
+            &nodes.path("audit_log.json", id),
+        ));
         let mut child = nodes.spawn(id, false);
         let (refused, why) = p_exits_nonzero(&mut child, Duration::from_secs(15)).await;
         let started = nodes.path("ready", id).exists();
@@ -1787,6 +1808,62 @@ async fn test_q_audit_log_durability(report: &mut Report) {
             &format!("{name} makes the node refuse to start (non-zero exit, no ready file) instead of silently starting with an empty log"),
             refused && !started && msg_ok,
             format!("exit_nonzero={refused} ({why}) ready_file_written={started} error_mentions_audit_log={msg_ok}"),
+        );
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    // ---- Q7/Q8 (F-20): the append-only journal on the real node ----
+    let have_frames = frames.len() >= 2;
+    // Q7: one flipped bit inside the FIRST frame of a journal that has later frames.
+    {
+        let id = 3usize;
+        nodes.clear_outputs(id);
+        let snap = nodes.path("audit_log.json", id);
+        let _ = std::fs::remove_file(&snap);
+        let mut jr: Vec<u8> = frames.iter().flatten().copied().collect();
+        if let Some(b) = jr.get_mut(12) {
+            *b ^= 0x01;
+        }
+        std::fs::write(quorum_audit::journal::journal_path(&snap), &jr).unwrap();
+        let mut child = nodes.spawn(id, false);
+        let (refused, why) = p_exits_nonzero(&mut child, Duration::from_secs(15)).await;
+        let started = nodes.path("ready", id).exists();
+        let logtxt = std::fs::read_to_string(nodes.path("log", id)).unwrap_or_default();
+        let unchanged = std::fs::read(quorum_audit::journal::journal_path(&snap))
+            .ok()
+            .as_deref()
+            == Some(jr.as_slice());
+        report.record(
+            "Q7: a damaged frame in the audit-log JOURNAL makes the node refuse to start and leaves the journal untouched",
+            have_frames && refused && !started && logtxt.contains("audit log") && unchanged,
+            format!("frames={} exit_nonzero={refused} ({why}) ready_file_written={started} journal_unchanged={unchanged}", frames.len()),
+        );
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    // Q8: an INCOMPLETE final frame (a write that was never acknowledged) is cut
+    // off at startup; the acknowledged entries before it survive.
+    {
+        let id = 4usize;
+        nodes.clear_outputs(id);
+        let snap = nodes.path("audit_log.json", id);
+        let _ = std::fs::remove_file(&snap);
+        let good: Vec<u8> = frames.iter().flatten().copied().collect();
+        let mut jr = good.clone();
+        if let Some(first) = frames.first() {
+            jr.extend_from_slice(&first[..first.len() / 2]);
+        }
+        let jp = quorum_audit::journal::journal_path(&snap);
+        std::fs::write(&jp, &jr).unwrap();
+        let mut child = nodes.spawn(id, false);
+        let (exited_nonzero, why) = p_exits_nonzero(&mut child, Duration::from_secs(8)).await;
+        let truncated = std::fs::metadata(&jp).map(|m| m.len() as usize).ok() == Some(good.len());
+        let logtxt = std::fs::read_to_string(nodes.path("log", id)).unwrap_or_default();
+        report.record(
+            "Q8: an incomplete final audit-log journal frame is truncated at startup and the node does NOT refuse to start",
+            have_frames && !exited_nonzero && truncated && !logtxt.contains("corrupt audit log"),
+            format!("frames={} exited_nonzero={exited_nonzero} ({why}) journal_truncated_to_last_good_frame={truncated}", frames.len()),
         );
         let _ = child.kill();
         let _ = child.wait();

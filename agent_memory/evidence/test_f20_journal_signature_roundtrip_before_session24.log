@@ -1,0 +1,8 @@
+test journal::tests::entries_with_signatures_survive_the_journal_round_trip ... FAILED
+---- journal::tests::entries_with_signatures_survive_the_journal_round_trip stdout ----
+thread 'journal::tests::entries_with_signatures_survive_the_journal_round_trip' (5762) panicked at src/quorum_audit/src/journal.rs:295:9:
+   2: quorum_audit::journal::tests::entries_with_signatures_survive_the_journal_round_trip
+   3: quorum_audit::journal::tests::entries_with_signatures_survive_the_journal_round_trip::{closure#0}
+   4: <quorum_audit::journal::tests::entries_with_signatures_survive_the_journal_round_trip::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+    journal::tests::entries_with_signatures_survive_the_journal_round_trip
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.21s

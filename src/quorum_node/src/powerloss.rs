@@ -14,7 +14,7 @@
 //! runbook's repetition count is met on a real power cut or hypervisor
 //! power-off (not `kill -9`, which test group Q already covers).
 
-use crate::audit_store::{load_audit_log, persist_audit_log, write_atomic};
+use crate::audit_store::{commit, load_audit_log, write_atomic};
 use quorum_audit::AuditEvent;
 use std::path::Path;
 
@@ -40,8 +40,13 @@ pub fn workload(log_path: &Path, ack_path: &Path, max_entries: Option<u64>) -> R
             action: "powerloss_append".to_string(),
             timestamp_unix_ms: n,
         });
-        log.try_append(entry)?;
-        persist_audit_log(log_path, &log).map_err(|e| format!("persist failed: {e:?}"))?;
+        log.try_append(entry.clone())?;
+        commit(
+            log_path,
+            &[quorum_audit::journal::Record::Append { entry }],
+            &log,
+        )
+        .map_err(|e| format!("persist failed: {e:?}"))?;
         write_atomic(ack_path, (n + 1).to_string().as_bytes())
             .map_err(|e| format!("ack write failed: {e}"))?;
     }
@@ -91,6 +96,8 @@ mod tests {
         let d = dir("trunc");
         let (l, a) = (d.join("audit.json"), d.join("ack"));
         workload(&l, &a, Some(4)).unwrap();
+        // The workload journals; compact so this test damages the snapshot file.
+        crate::audit_store::compact(&l, &load_audit_log(&l).unwrap()).unwrap();
         let raw = std::fs::read(&l).unwrap();
         std::fs::write(&l, &raw[..raw.len() / 2]).unwrap();
         assert!(verify(&l, Some(&a)).unwrap_err().contains("LOG DAMAGED"));
@@ -101,11 +108,38 @@ mod tests {
         let d = dir("tamper");
         let (l, a) = (d.join("audit.json"), d.join("ack"));
         workload(&l, &a, Some(4)).unwrap();
+        // The workload journals; compact so this test damages the snapshot file.
+        crate::audit_store::compact(&l, &load_audit_log(&l).unwrap()).unwrap();
         let s = std::fs::read_to_string(&l)
             .unwrap()
             .replacen("powerloss-1", "powerloss-X", 1);
         std::fs::write(&l, s).unwrap();
         assert!(verify(&l, Some(&a)).unwrap_err().contains("LOG DAMAGED"));
+    }
+
+    #[test]
+    fn verify_rejects_a_damaged_journal() {
+        let d = dir("jdamage");
+        let (l, a) = (d.join("audit.json"), d.join("ack"));
+        workload(&l, &a, Some(4)).unwrap();
+        let jp = quorum_audit::journal::journal_path(&l);
+        let mut raw = std::fs::read(&jp).unwrap();
+        raw[30] ^= 0xff;
+        std::fs::write(&jp, raw).unwrap();
+        assert!(verify(&l, Some(&a)).unwrap_err().contains("LOG DAMAGED"));
+    }
+
+    #[test]
+    fn verify_rejects_a_journal_cut_below_the_acknowledged_count() {
+        let d = dir("jtrunc");
+        let (l, a) = (d.join("audit.json"), d.join("ack"));
+        workload(&l, &a, Some(4)).unwrap();
+        let jp = quorum_audit::journal::journal_path(&l);
+        let raw = std::fs::read(&jp).unwrap();
+        std::fs::write(&jp, &raw[..raw.len() / 2]).unwrap();
+        assert!(verify(&l, Some(&a))
+            .unwrap_err()
+            .contains("DURABILITY VIOLATION"));
     }
 
     #[test]

@@ -543,12 +543,9 @@ async fn main() {
         .chain(std::iter::once(tampered_node))
         .collect();
     for &id in &disk_read_ids {
-        let raw = std::fs::read(&audit_log_files[id]).unwrap_or_default();
-        let log: AuditLog = if raw.is_empty() {
-            AuditLog::default() // node never received anything before going offline
-        } else {
-            serde_json::from_slice(&raw).expect("persisted audit log is corrupt")
-        };
+        // Missing snapshot and journal = the node never received anything.
+        let log: AuditLog = quorum_audit::journal::load_log(&audit_log_files[id])
+            .expect("persisted audit log is corrupt");
         logs.insert(id, log);
     }
 
@@ -1038,8 +1035,9 @@ async fn http_json(
 /// file but not forge signatures would face exactly this problem) so the
 /// resulting file is internally self-consistent under `verify_chain()`.
 fn tamper_audit_log_on_disk(path: &std::path::Path) {
-    let raw = std::fs::read(path).expect("failed to read audit log to tamper with");
-    let mut log: AuditLog = serde_json::from_slice(&raw).expect("audit log file is corrupt");
+    // F-20: nodes persist a snapshot plus an append-only journal; read both.
+    let mut log: AuditLog =
+        quorum_audit::journal::load_log(path).expect("failed to read audit log to tamper with");
     if log.entries.is_empty() {
         panic!("nothing to tamper with -- log is empty");
     }
@@ -1060,6 +1058,9 @@ fn tamper_audit_log_on_disk(path: &std::path::Path) {
     );
     std::fs::write(path, serde_json::to_vec_pretty(&rebuilt).unwrap())
         .expect("failed to write tampered log back to disk");
+    // The tampered state is a plain snapshot; the journal would only re-apply the
+    // original entries over it.
+    let _ = std::fs::remove_file(quorum_audit::journal::journal_path(path));
 }
 
 fn now_unix_ms() -> u64 {
