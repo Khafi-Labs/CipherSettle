@@ -1,6 +1,8 @@
 # CipherSettle — Cryptographic Decision Records
 
-This document maintains the architectural decision records (ADRs) for the cryptographic and security designs within the CipherSettle protocol. 
+This document maintains the architectural decision records (ADRs) for the cryptographic and security designs within the CipherSettle protocol.
+
+**Evidence labels (Gap 17, session 25, read line by line against the code at commit 766c1a4).** **READ** = the cited code was read in that pass and matches. **EXECUTED** = a recorded test/probe demonstrates it (see `docs/PRODUCTION_READINESS.md`, `agent_memory/SECURITY_FINDINGS.md`). **UNVERIFIED** = not checked. This pass checks that the code does what each record SAYS; it does not judge the cryptography. **No independent cryptographer has reviewed any record below** (`NEEDS_HUMAN_CRYPTO_REVIEW`), and nothing here is a claim that the system is secure, audited or production-ready.
 
 ---
 
@@ -22,7 +24,7 @@ This document maintains the architectural decision records (ADRs) for the crypto
 
 **IMPLEMENTATION:** `quorum_core::DkgSession::receive_share` / `Complaint` type.
 
-**KNOWN LIMITATIONS:** No dispute resolution protocol is fully implemented for continued operation upon exclusion.
+**KNOWN LIMITATIONS:** No dispute resolution protocol is fully implemented for continued operation upon exclusion. READ (`quorum_core/src/bls.rs` `receive_share` returns `Result<(), Complaint>`). Still open (`SECURITY_REVIEW.md` R-3): the `from` field of DKG messages is not bound to the connection's certificate and `receive_commitment` overwrites a stored commitment for that dealer id, so any pinned-certificate holder can impersonate a dealer during the DKG window (`quorum_node/src/main.rs` `DkgCommitment` arm; `bls.rs` `commitments.insert`).
 
 ---
 
@@ -80,7 +82,7 @@ This document maintains the architectural decision records (ADRs) for the crypto
 
 **IMPLEMENTATION:** `quorum_vetseal::nizk`, wired into the live protocol: `quorum_node` emits a proof for every partial it sends (`quorum_core::seal_partial_with_proof`), and `quorum_client` verifies each node's proof before combining (`quorum_core::verify_sealed_partial`).
 
-**KNOWN LIMITATIONS:** Does **not** bind a `pk_share` to a node index by itself — the caller must independently confirm the presented `PublicKeyShare` matches `PublicKeySet::public_key_share(node_id)` from the DKG's own public commitment. The live path satisfies this: `verify_sealed_partial` re-derives the expected public key share from the group's own Feldman commitment rather than accepting the node's value. The proof system itself has **not** been reviewed by a qualified cryptographer — see `SECURITY_REVIEW.md` §6.B.
+**KNOWN LIMITATIONS:** The service can be configured to skip the proof check (`insecure_skip_share_proofs`, test-only; it logs a warning and nothing refuses it outside tests: F-28). Does **not** bind a `pk_share` to a node index by itself — the caller must independently confirm the presented `PublicKeyShare` matches `PublicKeySet::public_key_share(node_id)` from the DKG's own public commitment. The live path satisfies this: `verify_sealed_partial` re-derives the expected public key share from the group's own Feldman commitment rather than accepting the node's value. The proof system itself has **not** been reviewed by a qualified cryptographer — see `SECURITY_REVIEW.md` §6.B.
 
 ---
 
@@ -112,13 +114,13 @@ This document maintains the architectural decision records (ADRs) for the crypto
 
 **CONTEXT:** Finding 1.1 (CRITICAL: any holder of the shared mTLS client cert could derive any invoice's key with zero node-level authorization) and Finding 2.1 (HIGH: no anti-replay/freshness binding on derive requests).
 
-**DECISION:** Bind every `DeriveRequest` to `identity`, an expiry (`expires_at_unix_ms`, capped node-side at `MAX_DERIVE_AUTH_WINDOW_MS = 30_000`), a single-use 16-byte `nonce`, and the caller's `transport_public_key`, all under an HMAC-SHA256 MAC keyed by `service_auth_key`. Nodes verify the MAC (constant-time), reject expired or over-long-window requests, and track used nonces to reject replays.
+**DECISION:** Bind every `DeriveRequest` to `identity`, an expiry (`expires_at_unix_ms`, capped node-side at `MAX_DERIVE_AUTH_WINDOW_MS = 30_000`), a single-use 16-byte `nonce`, and the caller's `transport_public_key`, all under an HMAC-SHA256 MAC. **Current key model (Gap 3 step 1, EXECUTED by adversarial group S):** the service holds a MASTER secret and each node `i` is configured with only `derive_node_auth_key(master, i)` (HKDF-SHA256, `quorum_core/src/lib.rs`); the service signs each request with the target node's derived key (one request per node). The first version of this record described one key shared by all nodes. Nodes verify the MAC (constant-time), reject expired or over-long-window requests, and track used nonces to reject replays.
 
 **RATIONALE:** Addresses Findings 1.1 and 2.1 via a lightweight symmetric authentication token mechanism bound to the specific authorization parameters.
 
-**SECURITY PROPERTY:** A party holding only the shared mTLS client certificate, without also holding `service_auth_key`, cannot construct a valid `DeriveRequest` for any identity. A captured, valid `DeriveRequest` cannot be replayed after its expiry or after first use. Binding `transport_public_key` into the MAC prevents a party on the service-to-node hop from redirecting a sealed result to a transport key of their own.
+**SECURITY PROPERTY:** A party holding only the mTLS client certificate, without also holding a node's derived key, cannot construct a valid `DeriveRequest` for that node. A leaked derived key authorizes requests to THAT node only (below the `t+1` partials needed). A captured, valid `DeriveRequest` cannot be replayed after its expiry or after first use. Binding `transport_public_key` into the MAC prevents a party on the service-to-node hop from redirecting a sealed result to a transport key of their own.
 
-**ASSUMPTIONS:** `service_auth_key` remains a shared secret. A compromised `service_auth_key` allows forged requests. 
+**ASSUMPTIONS:** The service-held MASTER secret remains a single point of compromise: whoever holds it can authorize derivations on every node (THREAT_MODEL T-4). Removing that needs protocol-level change (Gap 3 step 2) which is `NEEDS_HUMAN_CRYPTO_REVIEW` and NOT done. No key rotation or versioning exists. READ: the node-side doc comment on `NodeConfig::service_auth_key_b64` still describes the old shared key (F-29).
 
 **IMPLEMENTATION:** `quorum_core::{sign_derive_auth, verify_derive_auth, build_derive_request, MAX_DERIVE_AUTH_WINDOW_MS}`; integrated into `quorum_node`.
 
@@ -144,7 +146,7 @@ This document maintains the architectural decision records (ADRs) for the crypto
 
 ## CRYPTO-008 — Analysis of `quorum_vetseal`'s Construction 
 
-**STATUS:** `VERIFIED_BY_REVIEW`
+**STATUS:** `SELF_REVIEWED_ONLY` (the label was `VERIFIED_BY_REVIEW`; no independent cryptographer was involved, so that label overstated it)
 
 **COMPONENT:** `quorum_vetseal`
 
