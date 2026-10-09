@@ -143,6 +143,60 @@ pub enum Divergence {
     LengthMismatch { ours: usize, theirs: usize },
 }
 
+/// Per-replica verdict from [`AuditLog::reconcile`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeStatus {
+    /// Identical to the reference.
+    Matches,
+    /// A strict prefix of the reference: stale (e.g. was offline), NOT evidence of tampering.
+    Behind { have: usize, reference: usize },
+    /// Holds entries beyond the proven reference that carry no quorum of verifying
+    /// co-signatures: invented, or a commit that never completed. Suspicious.
+    AheadUnproven { have: usize, reference: usize },
+    /// Disagrees with the reference at `seq`: rewritten or forked. Tamper evidence.
+    Diverged { seq: u64 },
+    /// The replica's own hash chain does not verify.
+    ChainInvalid,
+}
+
+/// Result of reconciling every reachable replica against the proven reference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReconcileReport {
+    pub reference_len: usize,
+    /// Tip hash of the proven reference (`None` when it is empty).
+    pub reference_tip: Option<Hash>,
+    pub max_reported_len: usize,
+    pub nodes: BTreeMap<usize, NodeStatus>,
+}
+
+impl ReconcileReport {
+    /// Replicas that disagree with the reference (tamper evidence).
+    pub fn diverged(&self) -> Vec<usize> {
+        self.ids(|s| matches!(s, NodeStatus::Diverged { .. }))
+    }
+    pub fn behind(&self) -> Vec<usize> {
+        self.ids(|s| matches!(s, NodeStatus::Behind { .. }))
+    }
+    /// Everything an operator should look at: diverged, ahead-unproven, chain-invalid.
+    pub fn suspicious(&self) -> Vec<usize> {
+        self.ids(|s| {
+            matches!(
+                s,
+                NodeStatus::Diverged { .. }
+                    | NodeStatus::AheadUnproven { .. }
+                    | NodeStatus::ChainInvalid
+            )
+        })
+    }
+    fn ids(&self, f: impl Fn(&NodeStatus) -> bool) -> Vec<usize> {
+        self.nodes
+            .iter()
+            .filter(|(_, s)| f(s))
+            .map(|(id, _)| *id)
+            .collect()
+    }
+}
+
 impl AuditLog {
     pub fn tip_hash(&self) -> Hash {
         self.entries
@@ -358,6 +412,106 @@ impl AuditLog {
         AuditLog {
             entries: reference_entries,
         }
+    }
+
+    /// Reconciles every replica in `logs` against
+    /// [`AuditLog::verified_majority_reference`] and classifies each one.
+    pub fn reconcile(
+        logs: &BTreeMap<usize, AuditLog>,
+        audit_keys: &BTreeMap<usize, VerifyingKey>,
+        min_sigs: usize,
+    ) -> ReconcileReport {
+        let reference = Self::verified_majority_reference(logs, audit_keys, min_sigs);
+        let nodes = logs
+            .iter()
+            .map(|(&id, log)| {
+                let status = if log.verify_chain().is_err() {
+                    NodeStatus::ChainInvalid
+                } else {
+                    match reference.diverges_from(log) {
+                        None => NodeStatus::Matches,
+                        Some(Divergence::HashMismatch { seq }) => NodeStatus::Diverged { seq },
+                        Some(Divergence::LengthMismatch { ours, theirs }) if theirs < ours => {
+                            NodeStatus::Behind {
+                                have: theirs,
+                                reference: ours,
+                            }
+                        }
+                        Some(Divergence::LengthMismatch { ours, theirs }) => {
+                            NodeStatus::AheadUnproven {
+                                have: theirs,
+                                reference: ours,
+                            }
+                        }
+                    }
+                };
+                (id, status)
+            })
+            .collect();
+        ReconcileReport {
+            reference_len: reference.entries.len(),
+            reference_tip: reference.entries.last().map(|e| e.entry_hash),
+            max_reported_len: logs.values().map(|l| l.entries.len()).max().unwrap_or(0),
+            nodes,
+        }
+    }
+
+    /// F-25: a reference built from entries that PROVE they were committed.
+    ///
+    /// [`AuditLog::majority_reference`] only counts how many reporting replicas hold
+    /// an entry, so a single replica with a longer or invented tail extends it. Here
+    /// an entry is admitted only if the copies of it that share one `entry_hash`
+    /// carry, between them, at least `min_sigs` (use `t + 1`) ed25519 co-signatures
+    /// that VERIFY against `audit_keys` over that hash. An invented entry has only
+    /// its liar's signature; a tampered replica's entry has a different hash, so its
+    /// stale signatures verify for nothing. Signatures held by different replicas
+    /// are combined. The reference stops (honestly) at the first sequence where no
+    /// hash reaches the quorum, where more than one does (equivocation), or where
+    /// the admitted entry does not extend the chain.
+    ///
+    /// A colluding `min_sigs` of nodes can still sign anything: that is inherent and
+    /// is what external notarization is for.
+    pub fn verified_majority_reference(
+        logs: &BTreeMap<usize, AuditLog>,
+        audit_keys: &BTreeMap<usize, VerifyingKey>,
+        min_sigs: usize,
+    ) -> AuditLog {
+        let max_len = logs.values().map(|l| l.entries.len()).max().unwrap_or(0);
+        let mut reference = AuditLog::default();
+        for seq in 0..max_len {
+            // hash -> (an entry with that hash, VERIFIED signatures seen across replicas)
+            let mut groups: BTreeMap<Hash, (AuditEntry, BTreeMap<usize, Vec<u8>>)> =
+                BTreeMap::new();
+            for log in logs.values() {
+                let Some(entry) = log.entries.get(seq) else {
+                    continue;
+                };
+                if !entry.verify_hash() {
+                    continue;
+                }
+                let group = groups
+                    .entry(entry.entry_hash)
+                    .or_insert_with(|| (entry.clone(), BTreeMap::new()));
+                for (id, sig) in &entry.signatures {
+                    if let Some(key) = audit_keys.get(id) {
+                        if entry.verify_signature(*id, key) {
+                            group.1.insert(*id, sig.clone());
+                        }
+                    }
+                }
+            }
+            let mut quorate = groups
+                .into_values()
+                .filter(|(_, sigs)| sigs.len() >= min_sigs);
+            let (Some((mut entry, sigs)), None) = (quorate.next(), quorate.next()) else {
+                break; // nothing reaches the quorum, or two conflicting entries do
+            };
+            entry.signatures = sigs;
+            if reference.try_append(entry).is_err() {
+                break;
+            }
+        }
+        reference
     }
 }
 
@@ -747,6 +901,202 @@ mod tests {
 
 #[cfg(test)]
 mod vote_slot_tests {
+    // F-25 (better fix): reference entries must carry >= min_sigs VERIFYING co-signatures.
+    mod verified_reference {
+        use super::super::*;
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
+        use std::collections::BTreeMap;
+
+        const N: usize = 5;
+        const MIN_SIGS: usize = 3; // t + 1
+
+        fn keys() -> (Vec<SigningKey>, BTreeMap<usize, VerifyingKey>) {
+            let sk: Vec<SigningKey> = (0..N).map(|_| SigningKey::generate(&mut OsRng)).collect();
+            let vk = sk
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (i, k.verifying_key()))
+                .collect();
+            (sk, vk)
+        }
+
+        fn ev(i: u64, who: &str) -> AuditEvent {
+            AuditEvent {
+                invoice_id: format!("i{i}"),
+                actor: who.into(),
+                action: "x".into(),
+                timestamp_unix_ms: i,
+            }
+        }
+
+        /// A log of `n` entries, each co-signed by the nodes in `signers`.
+        fn signed_log(sk: &[SigningKey], n: u64, signers: &[usize], who: &str) -> AuditLog {
+            let mut log = AuditLog::default();
+            for i in 0..n {
+                let mut e = log.propose_next(ev(i, who));
+                for &s in signers {
+                    e.signatures
+                        .insert(s, sign_entry_hash(&sk[s], &e.entry_hash));
+                }
+                log.try_append(e).unwrap();
+            }
+            log
+        }
+
+        #[test]
+        fn a_lone_reporter_with_an_invented_tail_cannot_extend_the_reference() {
+            let (sk, vk) = keys();
+            let honest = signed_log(&sk, 2, &[0, 1, 2], "a");
+            let mut liar = honest.clone();
+            let mut extra = liar.propose_next(ev(9, "mallory"));
+            extra
+                .signatures
+                .insert(4, sign_entry_hash(&sk[4], &extra.entry_hash)); // only its own
+            liar.try_append(extra).unwrap();
+            let mut logs = BTreeMap::new();
+            for id in 0..4 {
+                logs.insert(id, honest.clone());
+            }
+            logs.insert(4, liar);
+            let r = AuditLog::verified_majority_reference(&logs, &vk, MIN_SIGS);
+            assert_eq!(r.entries.len(), 2);
+        }
+
+        #[test]
+        fn a_tampered_node_is_still_detected_when_only_two_honest_copies_exist() {
+            // The orchestrator-demo shape that broke the naive F-25 fix: 3 nodes hold the
+            // entry (co-signed by all 3), 2 are offline, one of the 3 is then tampered.
+            let (sk, vk) = keys();
+            let honest = signed_log(&sk, 1, &[0, 1, 2], "a");
+            let mut tampered = AuditLog::default();
+            let mut e = tampered.propose_next(ev(0, "TAMPERED"));
+            e.signatures = honest.entries[0].signatures.clone(); // stale signatures kept
+            tampered.try_append(e).unwrap();
+            let mut logs = BTreeMap::new();
+            logs.insert(0, honest.clone());
+            logs.insert(1, honest.clone());
+            logs.insert(2, tampered);
+            logs.insert(3, AuditLog::default());
+            logs.insert(4, AuditLog::default());
+            let r = AuditLog::verified_majority_reference(&logs, &vk, MIN_SIGS);
+            assert_eq!(r.entries.len(), 1);
+            assert_eq!(r.entries[0].entry_hash, honest.entries[0].entry_hash);
+            assert!(
+                r.diverges_from(&logs[&2]).is_some(),
+                "tamper must be flagged"
+            );
+        }
+
+        #[test]
+        fn signatures_held_by_different_replicas_are_combined() {
+            let (sk, vk) = keys();
+            let a = signed_log(&sk, 1, &[0, 1], "a");
+            let b = signed_log(&sk, 1, &[2], "a");
+            // same content => same hash; signatures split across replicas
+            assert_eq!(a.entries[0].entry_hash, b.entries[0].entry_hash);
+            let mut logs = BTreeMap::new();
+            logs.insert(0, a);
+            logs.insert(1, b);
+            let r = AuditLog::verified_majority_reference(&logs, &vk, MIN_SIGS);
+            assert_eq!(r.entries.len(), 1);
+        }
+
+        #[test]
+        fn forged_or_wrong_key_signatures_do_not_count() {
+            let (sk, vk) = keys();
+            let mut log = signed_log(&sk, 1, &[0, 1, 2], "a");
+            // replace node 2's signature with node 3's (wrong key for id 2)
+            let h = log.entries[0].entry_hash;
+            log.entries[0]
+                .signatures
+                .insert(2, sign_entry_hash(&sk[3], &h));
+            let mut logs = BTreeMap::new();
+            logs.insert(0, log.clone());
+            logs.insert(1, log);
+            let r = AuditLog::verified_majority_reference(&logs, &vk, MIN_SIGS);
+            assert_eq!(r.entries.len(), 0, "only 2 valid signatures, quorum is 3");
+        }
+
+        #[test]
+        fn two_conflicting_entries_that_both_reach_quorum_stop_the_reference() {
+            // equivocation (R-2 shape): an honest outcome is to stop and say so, not to guess
+            let (sk, vk) = keys();
+            let a = signed_log(&sk, 1, &[0, 1, 2], "a");
+            let b = signed_log(&sk, 1, &[2, 3, 4], "different");
+            let mut logs = BTreeMap::new();
+            logs.insert(0, a.clone());
+            logs.insert(1, a);
+            logs.insert(2, b.clone());
+            logs.insert(3, b);
+            let r = AuditLog::verified_majority_reference(&logs, &vk, MIN_SIGS);
+            assert_eq!(r.entries.len(), 0);
+        }
+
+        #[test]
+        fn reconcile_classifies_every_node() {
+            let (sk, vk) = keys();
+            let honest = signed_log(&sk, 3, &[0, 1, 2], "a");
+            let behind = signed_log(&sk, 1, &[0, 1, 2], "a");
+            let mut ahead = honest.clone();
+            let mut extra = ahead.propose_next(ev(9, "mallory"));
+            extra
+                .signatures
+                .insert(4, sign_entry_hash(&sk[4], &extra.entry_hash));
+            ahead.try_append(extra).unwrap();
+            let mut tampered = AuditLog::default();
+            for (i, e) in honest.entries.iter().enumerate() {
+                let who = if i == 1 { "TAMPERED" } else { "a" };
+                let mut n = tampered.propose_next(ev(i as u64, who));
+                n.signatures = e.signatures.clone();
+                tampered.try_append(n).unwrap();
+            }
+            let mut logs = BTreeMap::new();
+            logs.insert(0, honest.clone());
+            logs.insert(1, behind);
+            logs.insert(2, ahead);
+            logs.insert(3, tampered);
+            logs.insert(4, honest);
+            let rep = AuditLog::reconcile(&logs, &vk, MIN_SIGS);
+            assert_eq!(rep.reference_len, 3);
+            assert_eq!(rep.max_reported_len, 4);
+            assert_eq!(rep.nodes[&0], NodeStatus::Matches);
+            assert_eq!(rep.nodes[&4], NodeStatus::Matches);
+            assert_eq!(
+                rep.nodes[&1],
+                NodeStatus::Behind {
+                    have: 1,
+                    reference: 3
+                }
+            );
+            assert_eq!(
+                rep.nodes[&2],
+                NodeStatus::AheadUnproven {
+                    have: 4,
+                    reference: 3
+                }
+            );
+            assert_eq!(rep.nodes[&3], NodeStatus::Diverged { seq: 1 });
+            assert_eq!(rep.diverged(), vec![3]);
+            assert_eq!(rep.suspicious(), vec![2, 3]);
+        }
+
+        #[test]
+        fn a_node_whose_own_chain_is_broken_is_reported_invalid() {
+            let (sk, vk) = keys();
+            let good = signed_log(&sk, 2, &[0, 1, 2], "a");
+            let mut broken = good.clone();
+            broken.entries[1].prev_hash = [7u8; 32];
+            let mut logs = BTreeMap::new();
+            logs.insert(0, good.clone());
+            logs.insert(1, good);
+            logs.insert(2, broken);
+            let rep = AuditLog::reconcile(&logs, &vk, MIN_SIGS);
+            assert_eq!(rep.nodes[&2], NodeStatus::ChainInvalid);
+            assert_eq!(rep.suspicious(), vec![2]);
+        }
+    }
+
     // F-25 characterisation: documents CURRENT behaviour (finding is OPEN).
     #[test]
     fn lone_reporter_extends_the_reference_f25() {

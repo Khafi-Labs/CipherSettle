@@ -10,6 +10,7 @@ description = "Phase 3 of the threshold-quorum roadmap: the product REST API, po
 ciphersettle_core = { path = "../ciphersettle_core" }
 quorum_core = { path = "../quorum_core" }
 quorum_audit = { path = "../quorum_audit" }
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 quorum_client = { path = "../quorum_client" }
 quorum_vetseal = { path = "../quorum_vetseal" }
 axum = "0.7"
@@ -39,3 +40,6 @@ serde_json = "1"
 base64 = "0.22"
 sha2 = "0.10"
 subtle = "2"
+
+[dev-dependencies]
+rand = "0.8"

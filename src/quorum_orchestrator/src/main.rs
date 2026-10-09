@@ -573,23 +573,36 @@ async fn main() {
         "\n[reconcile] building a majority-agreed reference from all {} reporting nodes' copies...",
         logs.len()
     );
-    let reference = AuditLog::majority_reference(&logs);
+    // F-25: the reference admits an entry only if it carries >= t+1 co-signatures that
+    // VERIFY against the nodes' audit public keys, so a lone replica cannot extend it.
+    let audit_keys: std::collections::BTreeMap<usize, ed25519_dalek::VerifyingKey> =
+        node_audit_keys
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (i, k.verifying_key()))
+            .collect();
+    let report = AuditLog::reconcile(&logs, &audit_keys, T + 1);
     println!(
-        "[reconcile] majority reference has {} entries (out of a max reported length of {}).",
-        reference.entries.len(),
-        logs.values().map(|l| l.entries.len()).max().unwrap_or(0)
+        "[reconcile] proven reference has {} entries (out of a max reported length of {}).",
+        report.reference_len, report.max_reported_len
     );
     let mut hash_mismatch_found_at = None;
-    for (&id, log) in &logs {
-        match reference.diverges_from(log) {
-            None => println!("[reconcile] node {id}: matches the majority reference. \u{2713}"),
-            Some(quorum_audit::Divergence::LengthMismatch { ours, theirs }) => {
-                println!(
-                    "[reconcile] node {id}: behind the majority reference ({theirs} vs {ours} entries) -- consistent with it having been offline before this entry was ever proposed to it, NOT evidence of tampering."
-                );
+    for (&id, status) in &report.nodes {
+        match status {
+            quorum_audit::NodeStatus::Matches => {
+                println!("[reconcile] node {id}: matches the proven reference. \u{2713}")
             }
-            Some(d @ quorum_audit::Divergence::HashMismatch { .. }) => {
-                println!("[reconcile] node {id}: DIVERGES from the majority reference -- {d:?}  \u{26a0}\u{fe0f}  TAMPER DETECTED");
+            quorum_audit::NodeStatus::Behind { have, reference } => println!(
+                "[reconcile] node {id}: behind the proven reference ({have} vs {reference} entries) -- consistent with it having been offline before this entry was ever proposed to it, NOT evidence of tampering."
+            ),
+            quorum_audit::NodeStatus::AheadUnproven { have, reference } => println!(
+                "[reconcile] node {id}: holds {have} entries but only {reference} are proven by a signature quorum -- SUSPICIOUS"
+            ),
+            quorum_audit::NodeStatus::ChainInvalid => {
+                println!("[reconcile] node {id}: its own hash chain is invalid -- TAMPER DETECTED")
+            }
+            quorum_audit::NodeStatus::Diverged { seq } => {
+                println!("[reconcile] node {id}: DIVERGES from the proven reference at seq {seq}  \u{26a0}\u{fe0f}  TAMPER DETECTED");
                 hash_mismatch_found_at = Some(id);
             }
         }

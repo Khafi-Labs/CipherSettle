@@ -1,0 +1,4 @@
+error[E0433]: cannot find module or crate `rand` in this scope
+error[E0432]: unresolved import `ed25519_dalek`
+error[E0425]: cannot find function `summarize` in this scope
+error[E0425]: cannot find function `render` in this scope

@@ -1,0 +1,4 @@
+error[E0599]: no associated function or constant named `reconcile` found for struct `AuditLog` in the current scope
+error[E0433]: cannot find type `NodeStatus` in this scope
+error[E0433]: cannot find type `NodeStatus` in this scope
+error[E0599]: no associated function or constant named `reconcile` found for struct `AuditLog` in the current scope

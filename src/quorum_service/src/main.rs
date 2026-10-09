@@ -53,6 +53,7 @@ mod db;
 mod error;
 mod http_metrics;
 mod migrations;
+mod reconciler;
 mod tls_serve;
 
 use axum::extract::{Path, Query, State};
@@ -97,6 +98,8 @@ fn hash_api_key(raw_key: &str) -> [u8; 32] {
 struct AppState {
     /// Gap 11: per-route request/error/latency series (see `http_metrics`).
     http_metrics: Arc<http_metrics::HttpMetrics>,
+    /// F-24: latest audit reconciliation result for `/metrics`.
+    reconciler: Arc<reconciler::ReconcilerState>,
     /// Audit finding A10: previously a single `Mutex<tokio_postgres::Client>`,
     /// which serializes every database operation across every concurrent
     /// request regardless of whether they touch the same rows. Replaced with
@@ -488,8 +491,9 @@ async fn metrics(
             "text/plain; version=0.0.4; charset=utf-8",
         )],
         format!(
-            "{}{}",
+            "{}{}{}",
             db::render_metrics(&snap, now),
+            state.reconciler.render(),
             state.http_metrics.render()
         ),
     ))
@@ -1162,6 +1166,60 @@ fn b64_encode(bytes: &[u8]) -> String {
 /// Request bodies are untrusted input over HTTP: a malformed value must
 /// produce a 400, never a panic or a dropped connection (F-21).
 /// Startup-only decode of a base64 config field (exits cleanly on bad input).
+/// F-24: starts the background audit reconciler when it can prove anything, and
+/// says loudly when it cannot (a tampered node log would then go unnoticed here).
+fn start_reconciler(
+    config: &ServiceConfig,
+    state: &Arc<AppState>,
+    reconciler_state: Arc<reconciler::ReconcilerState>,
+) {
+    let min_sigs = config.quorum_threshold + 1;
+    if let Err(why) = reconciler::check_enabled(
+        config.audit_public_keys.len(),
+        state.quorum_nodes.len(),
+        min_sigs,
+        config.reconcile_interval_secs,
+    ) {
+        eprintln!(
+            "[service] WARNING: audit reconciliation is DISABLED ({why}); nothing in this service will detect a tampered or diverging node audit log"
+        );
+        return;
+    }
+    let mut audit_keys = std::collections::BTreeMap::new();
+    for k in &config.audit_public_keys {
+        let raw = cfg_b64("audit_public_keys.key_b64", &k.key_b64);
+        let arr = or_fatal(
+            "service",
+            "audit_public_keys.key_b64 must be 32 bytes",
+            <[u8; 32]>::try_from(raw.as_slice()).map_err(|_| "wrong length"),
+        );
+        let key = or_fatal(
+            "service",
+            "audit_public_keys.key_b64 is not a valid ed25519 public key",
+            ed25519_dalek::VerifyingKey::from_bytes(&arr),
+        );
+        audit_keys.insert(k.id, key);
+    }
+    let settings = reconciler::Settings {
+        nodes: state.quorum_nodes.clone(),
+        audit_keys,
+        min_sigs,
+        interval: Duration::from_secs(config.reconcile_interval_secs),
+        notary_addr: config.notary_addr.clone(),
+    };
+    eprintln!(
+        "[service] audit reconciliation enabled: every {}s, {} signatures needed to prove an entry{}",
+        config.reconcile_interval_secs,
+        min_sigs,
+        if settings.notary_addr.is_some() { ", notarizing the proven tip" } else { "" }
+    );
+    tokio::spawn(reconciler::run_forever(
+        reconciler_state,
+        state.connector.clone(),
+        settings,
+    ));
+}
+
 fn cfg_b64(field: &str, s: &str) -> Vec<u8> {
     or_fatal("service", field, quorum_core::config::b64_decode(s))
 }
@@ -1374,6 +1432,7 @@ async fn main() {
         ),
     );
     let http_metrics = Arc::new(http_metrics::HttpMetrics::new());
+    let reconciler_state = Arc::new(reconciler::ReconcilerState::new());
     let state = Arc::new(AppState {
         db: db_pool,
         api_keys,
@@ -1406,8 +1465,10 @@ async fn main() {
         audit_lock: tokio::sync::Mutex::new(()),
         ready_cache: tokio::sync::Mutex::new(None),
         http_metrics: http_metrics.clone(),
+        reconciler: reconciler_state.clone(),
     });
     tokio::spawn(audit_outbox_drainer(state.clone()));
+    start_reconciler(&config, &state, reconciler_state);
 
     let app = Router::new()
         .route("/invoices", post(register_invoice))

@@ -4,6 +4,18 @@ fn default_db_pool_max_size() -> usize {
     16
 }
 
+fn default_reconcile_interval_secs() -> u64 {
+    60
+}
+
+/// One quorum node's ed25519 AUDIT public key (not its TLS key), used to verify
+/// the co-signatures on audit entries during reconciliation (F-24/F-25).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditKeyRef {
+    pub id: usize,
+    pub key_b64: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKeyConfig {
     pub key: String,
@@ -51,6 +63,14 @@ pub struct ServiceConfig {
     pub service_auth_key_b64: String,
     pub quorum_nodes: Vec<QuorumNodeRef>,
     pub notary_addr: Option<String>,
+    /// Audit public keys of the quorum nodes. With at least `quorum_threshold + 1` of
+    /// them the service reconciles the nodes' audit logs in the background
+    /// (`reconciler`); without them it cannot prove anything and says so at startup.
+    #[serde(default)]
+    pub audit_public_keys: Vec<AuditKeyRef>,
+    /// Seconds between reconciliation passes; 0 disables the reconciler.
+    #[serde(default = "default_reconcile_interval_secs")]
+    pub reconcile_interval_secs: u64,
     pub notary_cert_der_b64: Option<String>,
     /// Path to a node's published group `PublicKeySet` JSON (see
     /// `quorum_node`'s `pubkey_file`).
