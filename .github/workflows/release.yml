@@ -1,0 +1,28 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<'NOTES'
+          Pilot-grade release. Not production-ready: no external audit, no cryptographer
+          review of the custom TLS verifiers, and no KMS/HSM integration. Use non-real data only.
+          See docs/PRODUCTION_READINESS.md and agent_memory/SECURITY_FINDINGS.md for the open items.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" \
+            --title "CipherSettle $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --generate-notes \
+            --prerelease
