@@ -105,6 +105,9 @@ jobs:
         run: test "$CIPHERSETTLE_TEST_DB_REQUIRED" = "1"
       - name: Create test databases
         run: bash ci/setup_test_db.sh
+      - name: TLS-enabled Postgres cluster for the live DB-TLS tests (F-27)
+        run: |
+          bash ci/setup_ssl_test_db.sh "$RUNNER_TEMP/ssl" | sed 's/^export //' >> "$GITHUB_ENV"
       - run: cargo build --workspace --locked --all-targets
       # Includes the unit regressions and the committed fuzz-corpus replay
       # (quorum_adversarial corpus_tests); NOT coverage-guided fuzzing.

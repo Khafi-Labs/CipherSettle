@@ -11,6 +11,8 @@ cd "$(dirname "$0")/.."
 OUT="${1:-verification_out}"; mkdir -p "$OUT"; rm -f "$OUT"/*.log "$OUT"/summary.txt
 export CIPHERSETTLE_TEST_DB_REQUIRED=1
 export CIPHERSETTLE_TEST_DB_URL="${CIPHERSETTLE_TEST_DB_URL:-postgres://postgres:ciphersettle_dev@127.0.0.1:5432/ciphersettle_test}"
+# F-27: the live DB-TLS tests need the TLS-enabled cluster (port 5433).
+eval "$(bash ci/setup_ssl_test_db.sh "${CIPHERSETTLE_SSL_DB_DIR:-/tmp/ciphersettle_ssl}")" || { echo "FAIL: ssl test db setup" >&2; exit 1; }
 rm -rf "${CARGO_TARGET_DIR:-target}/tmp"
 overall=0
 { echo "date:    $(date -u +%FT%TZ)"; echo "git:     $(git rev-parse HEAD 2>/dev/null) $(git diff --quiet 2>/dev/null || echo '(+uncommitted changes)')"

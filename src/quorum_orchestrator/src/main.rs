@@ -630,6 +630,10 @@ async fn main() {
         &pubkey_files[live_ids[0]],
         T,
         &service_auth_key,
+        &node_audit_keys
+            .iter()
+            .map(|k| b64(&k.verifying_key().to_bytes()))
+            .collect::<Vec<_>>(),
     )
     .await;
 
@@ -657,6 +661,7 @@ async fn run_phase3_demo(
     group_pubkey_file: &std::path::Path,
     threshold: usize,
     service_auth_key: &[u8],
+    node_audit_pubkeys_b64: &[String],
 ) {
     println!("=== Phase 3: product API (quorum_service) over Postgres + the live quorum ===\n");
 
@@ -703,6 +708,12 @@ async fn run_phase3_demo(
         "notary_cert_der_b64": b64(&notary_identity.cert_der),
         "group_pubkey_file": group_pubkey_file.to_string_lossy(),
         "quorum_threshold": threshold,
+        // F-24: let the service's background reconciler verify the live nodes' logs.
+        "audit_public_keys": node_audit_pubkeys_b64.iter().enumerate().map(|(j, k)| json!({
+            "id": j,
+            "key_b64": k,
+        })).collect::<Vec<_>>(),
+        "reconcile_interval_secs": 1,
         "max_ciphertext_bytes": 65536,
         "ciphertext_retention_ms": 1500u64, // compressed for demo purposes; a real deployment uses days, not milliseconds
         "derive_rate_limit_max_calls": 5,
@@ -966,8 +977,17 @@ async fn run_phase3_demo(
     );
     println!("[phase3] re-pruning correctly rejected -> 409 Conflict");
 
-    // 6. get_audit_log -- public, should show the full lifecycle in order.
+    // 6. get_audit_log -- needs an API key since F-26, should show the full lifecycle in order.
     let (status, body) = http_json(
+        &service_listen_addr,
+        "GET",
+        &format!("/audit-log?invoice_id={invoice_id}"),
+        Some(regulator_key),
+        None,
+    )
+    .await;
+    // F-26: anonymous reads are refused by default.
+    let (anon_status, _) = http_json(
         &service_listen_addr,
         "GET",
         &format!("/audit-log?invoice_id={invoice_id}"),
@@ -975,6 +995,11 @@ async fn run_phase3_demo(
         None,
     )
     .await;
+    assert_eq!(
+        anon_status, 401,
+        "an anonymous GET /audit-log must be refused by default (F-26)"
+    );
+    println!("[phase3] anonymous GET /audit-log correctly refused -> 401");
     assert_eq!(status, 200, "get_audit_log failed: {body}");
     let entries: Vec<serde_json::Value> = serde_json::from_str(&body).unwrap();
     let actions: Vec<&str> = entries
@@ -992,6 +1017,45 @@ async fn run_phase3_demo(
     assert!(actions.contains(&"disclosure_request")); // the regulator's derive call
     assert!(actions.contains(&"invoice_settled"));
     assert!(actions.contains(&"ciphertext_pruned"));
+
+    // F-24, live: the service's own reconciler must have run against the live nodes over mTLS
+    // and published its verdict on /metrics (admin key). Live nodes serve their in-memory
+    // logs, so this proves the wiring (fetch, signature-quorum reference, metrics), not the
+    // detection of a disk tamper, which the offline reconcile above and the unit tests cover.
+    let mut metrics_text = String::new();
+    for _ in 0..20 {
+        let (st, body) = http_json(
+            &service_listen_addr,
+            "GET",
+            "/metrics",
+            Some(admin_key),
+            None,
+        )
+        .await;
+        assert_eq!(st, 200, "admin /metrics failed: {body}");
+        metrics_text = body;
+        if metrics_text.contains("ciphersettle_audit_reconcile_runs_total")
+            && !metrics_text.contains("ciphersettle_audit_reconcile_runs_total 0")
+            && !metrics_text.contains("ciphersettle_audit_reconcile_reference_entries 0")
+        {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    assert!(
+        !metrics_text.contains("ciphersettle_audit_reconcile_runs_total 0")
+            && metrics_text.contains("ciphersettle_audit_reconcile_runs_total"),
+        "the service reconciler never completed a pass:\n{metrics_text}"
+    );
+    assert!(
+        !metrics_text.contains("ciphersettle_audit_reconcile_reference_entries 0"),
+        "the reconciler proved no entries:\n{metrics_text}"
+    );
+    assert!(
+        metrics_text.contains("ciphersettle_audit_reconcile_suspicious_nodes 0"),
+        "the reconciler flagged a live node:\n{metrics_text}"
+    );
+    println!("[phase3] service reconciler live: runs>0, reference proven, no suspicious live node (F-24)");
 
     println!("\n=== Phase 3 exit-criteria demo complete: register -> grant -> derive (via the live quorum) -> settle -> prune, end to end over HTTP against a real Postgres-backed service, API surface matching the original .did method set. ===");
 

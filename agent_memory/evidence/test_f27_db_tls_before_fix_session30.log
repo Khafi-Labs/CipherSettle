@@ -1,0 +1,12 @@
+error[E0425]: cannot find function `check_db_tls_policy` in this scope
+  --> src/quorum_service/src/db_tls.rs:12:17
+   |
+12 |         assert!(check_db_tls_policy(&cfg("postgres://u@127.0.0.1/db")).is_ok());
+--
+error[E0425]: cannot find function `check_db_tls_policy` in this scope
+  --> src/quorum_service/src/db_tls.rs:13:17
+   |
+13 |         assert!(check_db_tls_policy(&cfg("postgres://u@localhost/db")).is_ok());
+--
+error[E0425]: cannot find function `check_db_tls_policy` in this scope
+  --> src/quorum_service/src/db_tls.rs:14:17

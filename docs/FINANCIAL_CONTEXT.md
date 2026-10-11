@@ -116,7 +116,7 @@ is NOT automatic (F-24).
 | Settle | `POST /invoices/:id/settle` | Issuer or granted financier | `invoice_settled` | Records that the receivable was settled. **Money does not move here** — this is a terminal-state marker for retention and pruning eligibility |
 | Prune | `POST /invoices/:id/prune` | Anyone, gated by eligibility | `ciphertext_pruned` | Ciphertext may be deleted once settled **and** past the retention window. The audit log is never pruned |
 | Regulator | `POST /regulators`, `DELETE /regulators/:id` | Admin only | — | Grants or removes the supervisory role |
-| Inspect | `GET /audit-log`, `GET /invoices/:id/merkle-proof` | **Nobody is checked: these two endpoints take no credentials, by design: public metadata, but it names invoice ids, actors and actions** (F-26; `/audit-log` also reads one node's replica only) | — | The compliance artifact: who did what, in order, and a Merkle inclusion proof that a given invoice's commitment is in the log |
+| Inspect | `GET /audit-log`, `GET /invoices/:id/merkle-proof` | **Any valid API key** (since session 30, F-26; `public_read_endpoints: true` re-opens anonymous reads). The data names invoice ids, actors and actions, and any keyholder can read all of it, not just their own invoices; `/audit-log` also reads one node's replica only | — | The compliance artifact: who did what, in order, and a Merkle inclusion proof that a given invoice's commitment is in the log |
 
 Two honest qualifications on that table:
 

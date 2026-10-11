@@ -1,0 +1,3 @@
+      1 error: could not compile `quorum_service` (bin "quorum_service" test) due to 6 previous errors
+      5 error[E0425]: cannot find function `check_read_access` in this scope
+      1 error[E0425]: cannot find function `default_public_read_endpoints` in this scope

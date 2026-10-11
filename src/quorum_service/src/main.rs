@@ -50,6 +50,7 @@
 )]
 mod config;
 mod db;
+mod db_tls;
 mod error;
 mod http_metrics;
 mod migrations;
@@ -100,6 +101,8 @@ struct AppState {
     http_metrics: Arc<http_metrics::HttpMetrics>,
     /// F-24: latest audit reconciliation result for `/metrics`.
     reconciler: Arc<reconciler::ReconcilerState>,
+    /// F-26: when false (default) the two read endpoints need a valid API key.
+    public_read_endpoints: bool,
     /// Audit finding A10: previously a single `Mutex<tokio_postgres::Client>`,
     /// which serializes every database operation across every concurrent
     /// request regardless of whether they touch the same rows. Replaced with
@@ -198,14 +201,72 @@ fn find_caller_id_constant_time(
     found_caller_id
 }
 
-fn authenticate(headers: &HeaderMap, state: &AppState) -> Result<String, ApiError> {
-    let header = headers.get("authorization").ok_or(ApiError::Unauthorized)?;
-    let value = header.to_str().map_err(|_| ApiError::Unauthorized)?;
+fn caller_from_authorization(
+    value: Option<&str>,
+    api_keys: &[ApiKeyEntry],
+) -> Result<String, ApiError> {
     let key = value
+        .ok_or(ApiError::Unauthorized)?
         .strip_prefix("Bearer ")
         .ok_or(ApiError::Unauthorized)?;
     let presented_hash = hash_api_key(key);
-    find_caller_id_constant_time(&presented_hash, &state.api_keys).ok_or(ApiError::Unauthorized)
+    find_caller_id_constant_time(&presented_hash, api_keys).ok_or(ApiError::Unauthorized)
+}
+
+fn authenticate(headers: &HeaderMap, state: &AppState) -> Result<String, ApiError> {
+    let value = match headers.get("authorization") {
+        Some(h) => Some(h.to_str().map_err(|_| ApiError::Unauthorized)?),
+        None => None,
+    };
+    caller_from_authorization(value, &state.api_keys)
+}
+
+/// F-26: read endpoints (`GET /audit-log`, `GET /invoices/:id/merkle-proof`) require a valid
+/// API key unless the operator explicitly sets `public_read_endpoints: true`.
+fn check_read_access(
+    public: bool,
+    authorization: Option<&str>,
+    api_keys: &[ApiKeyEntry],
+) -> Result<(), ApiError> {
+    if public {
+        return Ok(());
+    }
+    caller_from_authorization(authorization, api_keys).map(|_| ())
+}
+
+fn authorize_read(headers: &HeaderMap, state: &AppState) -> Result<(), ApiError> {
+    let value = match headers.get("authorization") {
+        Some(h) => Some(h.to_str().map_err(|_| ApiError::Unauthorized)?),
+        None => None,
+    };
+    check_read_access(state.public_read_endpoints, value, &state.api_keys)
+}
+
+#[cfg(test)]
+mod read_access_tests {
+    use super::*;
+
+    fn keys() -> Vec<ApiKeyEntry> {
+        vec![ApiKeyEntry::new("alpha-key", "alpha".to_string())]
+    }
+
+    #[test]
+    fn default_policy_requires_a_valid_key_for_read_endpoints() {
+        assert!(check_read_access(false, None, &keys()).is_err());
+        assert!(check_read_access(false, Some("Bearer wrong"), &keys()).is_err());
+        assert!(check_read_access(false, Some("alpha-key"), &keys()).is_err());
+        assert!(check_read_access(false, Some("Bearer alpha-key"), &keys()).is_ok());
+    }
+
+    #[test]
+    fn explicit_public_opt_out_allows_anonymous_reads() {
+        assert!(check_read_access(true, None, &keys()).is_ok());
+    }
+
+    #[test]
+    fn config_defaults_to_authenticated_reads() {
+        assert!(!crate::config::default_public_read_endpoints());
+    }
 }
 
 #[cfg(test)]
@@ -995,8 +1056,10 @@ struct AuditLogQuery {
 
 async fn get_audit_log(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Query(q): Query<AuditLogQuery>,
 ) -> Result<Json<Vec<quorum_audit::AuditEntry>>, ApiError> {
+    authorize_read(&headers, &state)?;
     let (_, addr) = state
         .quorum_nodes
         .first()
@@ -1033,8 +1096,10 @@ struct MerkleProofResp {
 
 async fn get_merkle_proof(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(invoice_id): Path<String>,
 ) -> Result<Json<MerkleProofResp>, ApiError> {
+    authorize_read(&headers, &state)?;
     let client = state
         .db
         .get()
@@ -1240,10 +1305,28 @@ async fn main() {
         let Some(db_url) = std::env::args().nth(2) else {
             quorum_core::config::fatal("service", "usage: quorum_service migrate <db_url>");
         };
+        let pg: tokio_postgres::Config = or_fatal("service", "invalid db_url", db_url.parse());
+        or_fatal("service", "db tls policy", db_tls::check_db_tls_policy(&pg));
+        // Optional CA for sslmode=require, as a base64 DER list separated by commas.
+        let cas: Vec<Vec<u8>> = std::env::var("CIPHERSETTLE_DB_CA_DER_B64")
+            .unwrap_or_default()
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                or_fatal(
+                    "service",
+                    "bad CIPHERSETTLE_DB_CA_DER_B64",
+                    b64_decode_request_field(s),
+                )
+            })
+            .collect();
+        let mut pg = pg;
+        db_tls::apply_tls_defaults(&mut pg, &cas);
+        let tls = or_fatal("service", "db tls", db_tls::build_connector(&pg, &cas));
         let (mut client, conn) = or_fatal(
             "service",
             "cannot connect to the database",
-            tokio_postgres::connect(&db_url, tokio_postgres::NoTls).await,
+            pg.connect(tls).await,
         );
         tokio::spawn(async move {
             let _ = conn.await;
@@ -1298,9 +1381,32 @@ async fn main() {
     // internally by the pool) and hands out one per checkout.
     let pg_config: tokio_postgres::Config =
         or_fatal("service", "invalid db_url", config.db_url.parse());
+    or_fatal(
+        "service",
+        "db tls policy",
+        db_tls::check_db_tls_policy(&pg_config),
+    );
+    let db_cas: Vec<Vec<u8>> = config
+        .db_tls_ca_der_b64
+        .iter()
+        .map(|c| {
+            or_fatal(
+                "service",
+                "bad db_tls_ca_der_b64",
+                b64_decode_request_field(c),
+            )
+        })
+        .collect();
+    let mut pg_config = pg_config;
+    db_tls::apply_tls_defaults(&mut pg_config, &db_cas);
+    let db_tls = or_fatal(
+        "service",
+        "db tls",
+        db_tls::build_connector(&pg_config, &db_cas),
+    );
     let manager = deadpool_postgres::Manager::from_config(
         pg_config,
-        tokio_postgres::NoTls,
+        db_tls,
         deadpool_postgres::ManagerConfig {
             recycling_method: deadpool_postgres::RecyclingMethod::Fast,
         },
@@ -1466,6 +1572,7 @@ async fn main() {
         ready_cache: tokio::sync::Mutex::new(None),
         http_metrics: http_metrics.clone(),
         reconciler: reconciler_state.clone(),
+        public_read_endpoints: config.public_read_endpoints,
     });
     tokio::spawn(audit_outbox_drainer(state.clone()));
     start_reconciler(&config, &state, reconciler_state);

@@ -33,6 +33,16 @@ pub struct QuorumNodeRef {
 pub struct ServiceConfig {
     pub listen_addr: String,
     pub db_url: String,
+    /// F-26: `GET /audit-log` and `GET /invoices/:id/merkle-proof` need a valid API key unless
+    /// this is explicitly set to true (the old behaviour: anonymous reads of invoice ids,
+    /// actors and actions).
+    #[serde(default = "default_public_read_endpoints")]
+    pub public_read_endpoints: bool,
+    /// F-27: DER certificates (base64) of the CAs trusted to have signed the database server
+    /// certificate. Required when `db_url` says `sslmode=require`, which is itself required
+    /// for any non-loopback database host.
+    #[serde(default)]
+    pub db_tls_ca_der_b64: Vec<String>,
     /// Maximum number of pooled Postgres connections (audit finding A10).
     /// Defaults to 16 if the config file predates this field, so existing
     /// deployment configs don't need to be touched to keep working.
@@ -136,6 +146,10 @@ pub fn check_insecure_flags(
         ));
     }
     Ok(())
+}
+
+pub fn default_public_read_endpoints() -> bool {
+    false
 }
 
 #[cfg(test)]
