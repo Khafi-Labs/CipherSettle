@@ -49,7 +49,6 @@ mod tls;
 use ed25519_dalek::{Signer, SigningKey};
 use quorum_audit::wire::NotaryMessage;
 use quorum_audit::NotarizationReceipt;
-use rustls::{Certificate, PrivateKey};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::sync::Arc;
@@ -125,8 +124,8 @@ async fn main() {
 
     eprintln!("[notary] starting on {}", config.listen_addr);
 
-    let own_cert = Certificate(b64_decode("cert_der_b64", &config.cert_der_b64));
-    let own_key = PrivateKey(b64_decode("key_der_b64", &config.key_der_b64));
+    let own_cert = b64_decode("cert_der_b64", &config.cert_der_b64);
+    let own_key = b64_decode("key_der_b64", &config.key_der_b64);
     let allowed: Vec<Vec<u8>> = config
         .allowed_client_certs_b64
         .iter()
@@ -136,10 +135,7 @@ async fn main() {
 
     let server_config = or_fatal(
         "bad notary cert/key",
-        rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_client_cert_verifier(verifier)
-            .with_single_cert(vec![own_cert], own_key),
+        verifier.server_config(own_cert, own_key),
     );
     let acceptor = TlsAcceptor::from(Arc::new(server_config));
 

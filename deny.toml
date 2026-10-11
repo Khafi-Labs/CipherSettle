@@ -14,24 +14,12 @@ no-default-features = false
 # `cargo audit --ignore` list from this block, so `cargo deny check` and
 # `cargo audit` in CI always agree. Gap 7 removed the postgres-protocol /
 # tokio-postgres / time ignores by lifting the sandbox pins (executed:
-# cargo audit with no ignores now reports only the three rustls-webpki IDs).
+# cargo audit with no ignores reported only the three rustls-webpki IDs). Session 30 migrated to rustls 0.23 / rustls-webpki 0.103.15 and the ignore list is now EMPTY (F-30).
 # ---------------------------------------------------------------------
 [advisories]
 version = 2
 db-urls = ["https://github.com/rustsec/advisory-db"]
-ignore = [
-    # rustls-webpki 0.101.7 (RUSTSEC-2026-0098, -0099, -0104): name-constraint
-    # acceptance and CRL parsing. Fix means migrating rustls 0.21 -> 0.23.
-    # ASSESSMENT, NOT A PROOF: every TLS verifier in this workspace is a
-    # custom pinned-DER-equality verifier (quorum_node/quorum_client/
-    # quorum_notary tls.rs) that never calls WebPkiVerifier, path building or
-    # CRL handling, and no CRLs are ever supplied. rustls may still parse the
-    # end-entity cert during the handshake. Needs human review; remove when
-    # rustls is migrated.
-    "RUSTSEC-2026-0098",
-    "RUSTSEC-2026-0099",
-    "RUSTSEC-2026-0104",
-]
+ignore = []
 
 # ---------------------------------------------------------------------
 # Licenses

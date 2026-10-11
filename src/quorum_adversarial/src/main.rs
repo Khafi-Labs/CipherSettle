@@ -27,7 +27,7 @@ use quorum_core::Message;
 // now that threshold_crypto is gone).
 use quorum_core::PublicKeySet;
 use rand::rngs::OsRng as OsRng08;
-use rustls::{Certificate, ServerName};
+use rustls::pki_types::ServerName;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Arc;
@@ -2095,24 +2095,7 @@ async fn test_f_mtls_pentest(report: &mut Report) {
     let server_name = ServerName::try_from("quorum-node").unwrap();
 
     // F1: no client certificate at all.
-    struct AcceptAnyServer;
-    impl rustls::client::ServerCertVerifier for AcceptAnyServer {
-        fn verify_server_cert(
-            &self,
-            _end_entity: &Certificate,
-            _intermediates: &[Certificate],
-            _server_name: &ServerName,
-            _scts: &mut dyn Iterator<Item = &[u8]>,
-            _ocsp_response: &[u8],
-            _now: std::time::SystemTime,
-        ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-            Ok(rustls::client::ServerCertVerified::assertion())
-        }
-    }
-    let no_client_auth_config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_custom_certificate_verifier(Arc::new(AcceptAnyServer))
-        .with_no_client_auth();
+    let no_client_auth_config = accept_any_client_config();
     let connector_no_auth = TlsConnector::from(Arc::new(no_client_auth_config));
     let stream = TcpStream::connect(&addr).await.unwrap();
     let rejected = match connector_no_auth.connect(server_name.clone(), stream).await {
@@ -2932,19 +2915,51 @@ fn b64_decode_fixed<const LEN: usize>(s: &str) -> [u8; LEN] {
 /// speaks real TLS at all (audit finding A5), which is orthogonal to
 /// certificate trust policy (in a real deployment that's the browser's
 /// or OS's job, not this project's). Equivalent to `curl -k`.
-struct AcceptAnyServerCert;
-impl rustls::client::ServerCertVerifier for AcceptAnyServerCert {
+#[derive(Debug)]
+struct AcceptAnyServerCert(rustls::crypto::WebPkiSupportedAlgorithms);
+impl rustls::client::danger::ServerCertVerifier for AcceptAnyServerCert {
     fn verify_server_cert(
         &self,
-        _end_entity: &Certificate,
-        _intermediates: &[Certificate],
-        _server_name: &ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
         _ocsp_response: &[u8],
-        _now: std::time::SystemTime,
-    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::ServerCertVerified::assertion())
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
     }
+    fn verify_tls12_signature(
+        &self,
+        m: &[u8],
+        c: &rustls::pki_types::CertificateDer<'_>,
+        d: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(m, c, d, &self.0)
+    }
+    fn verify_tls13_signature(
+        &self,
+        m: &[u8],
+        c: &rustls::pki_types::CertificateDer<'_>,
+        d: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(m, c, d, &self.0)
+    }
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.0.supported_schemes()
+    }
+}
+
+/// A TLS client config that trusts any server certificate and presents no client certificate.
+fn accept_any_client_config() -> rustls::ClientConfig {
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    rustls::ClientConfig::builder_with_provider(provider.clone())
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(AcceptAnyServerCert(
+            provider.signature_verification_algorithms,
+        )))
+        .with_no_client_auth()
 }
 
 // =========================================================================
@@ -3289,10 +3304,7 @@ async fn test_k_tls_termination(report: &mut Report) {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
-        let tls_config = rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_custom_certificate_verifier(Arc::new(AcceptAnyServerCert))
-            .with_no_client_auth();
+        let tls_config = accept_any_client_config();
         let connector = TlsConnector::from(Arc::new(tls_config));
         let tcp = TcpStream::connect("127.0.0.1:19597").await.unwrap();
         let tls_result = tokio::time::timeout(

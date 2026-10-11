@@ -1,0 +1,6 @@
+test pinned_certificate_without_its_private_key_is_refused ... FAILED
+test client_presenting_a_pinned_certificate_without_its_key_is_refused ... FAILED
+test unpinned_client_certificate_is_refused ... ok
+test pinned_peers_complete_a_round_trip ... ok
+test unpinned_server_certificate_is_refused ... ok
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s

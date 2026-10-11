@@ -59,7 +59,7 @@ use quorum_core::{
 };
 use quorum_core::{PublicKeySet, SecretKeyShare};
 use rand::thread_rng;
-use rustls::{Certificate, PrivateKey, ServerName};
+use rustls::pki_types::ServerName;
 use share_store::{FileKek, ShareStore};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -355,8 +355,8 @@ async fn main() {
         Err(e) => fatal(&e),
     };
 
-    let own_cert = Certificate(cfg_b64("cert_der_b64", &config.cert_der_b64));
-    let own_key = PrivateKey(cfg_b64("key_der_b64", &config.key_der_b64));
+    let own_cert = cfg_b64("cert_der_b64", &config.cert_der_b64);
+    let own_key = cfg_b64("key_der_b64", &config.key_der_b64);
     let client_cert_der = cfg_b64("client_cert_der_b64", &config.client_cert_der_b64);
 
     // Pinned allow-list: every other quorum member's cert, plus the
@@ -373,20 +373,14 @@ async fn main() {
     let server_config = or_fatal(
         "node",
         "bad own cert/key for server config",
-        rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_client_cert_verifier(verifier.clone())
-            .with_single_cert(vec![own_cert.clone()], own_key.clone()),
+        verifier.server_config(own_cert.clone(), own_key.clone()),
     );
     let acceptor = TlsAcceptor::from(Arc::new(server_config));
 
     let client_config = or_fatal(
         "node",
         "bad own cert/key for client config",
-        rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_custom_certificate_verifier(verifier)
-            .with_client_auth_cert(vec![own_cert], own_key),
+        verifier.client_config(own_cert, own_key),
     );
     let connector = TlsConnector::from(Arc::new(client_config));
 

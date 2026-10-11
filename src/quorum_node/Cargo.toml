@@ -12,14 +12,14 @@ quorum_audit = { path = "../quorum_audit" }
 quorum_vetseal = { path = "../quorum_vetseal" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
-tokio-rustls = "0.24"
-rustls = { version = "0.21", features = ["dangerous_configuration"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 rand = "0.8"
 base64 = "0.22"
-# Gap 1 (share persistence). `ring` is already in the tree via rustls 0.21 (no
+# Gap 1 (share persistence). `ring` is already in the tree via rustls 0.23 (no
 # new crate in the lockfile); used for AES-256-GCM and the OS RNG.
 ring = "0.17"
 # Zeroizing wrappers for share/DEK/KEK; already in the tree via dalek.

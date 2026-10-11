@@ -29,11 +29,13 @@ use quorum_audit::wire::NotaryMessage;
 use quorum_audit::{AuditEntry, AuditEvent, AuditLog};
 use quorum_core::Message;
 use quorum_core::{PublicKeySet, Signature};
-use rustls::client::{ServerCertVerified, ServerCertVerifier};
-use rustls::server::{ClientCertVerified, ClientCertVerifier};
-use rustls::{Certificate, DistinguishedName, Error as TlsError, PrivateKey, ServerName};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::crypto::{ring as ring_provider, CryptoProvider, WebPkiSupportedAlgorithms};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
+use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
+use rustls::{DigitallySignedStruct, DistinguishedName, Error as TlsError, SignatureScheme};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
@@ -44,24 +46,25 @@ const DERIVE_AUTH_VALIDITY_MS: u64 = quorum_core::DEFAULT_DERIVE_AUTH_VALIDITY_M
 /// Pins the server certificate by exact byte match -- no CA, same model as
 /// every other mTLS verifier in this codebase (see `quorum_node::tls`'s
 /// doc comment for the reasoning).
+#[derive(Debug)]
 struct PinnedServerVerifier {
     allowed_der: Vec<Vec<u8>>,
+    algs: WebPkiSupportedAlgorithms,
 }
 
 impl ServerCertVerifier for PinnedServerVerifier {
     fn verify_server_cert(
         &self,
-        end_entity: &Certificate,
-        _intermediates: &[Certificate],
-        _server_name: &ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
         _ocsp_response: &[u8],
-        _now: SystemTime,
+        _now: UnixTime,
     ) -> Result<ServerCertVerified, TlsError> {
         if self
             .allowed_der
             .iter()
-            .any(|c| c.as_slice() == end_entity.0.as_slice())
+            .any(|c| c.as_slice() == end_entity.as_ref())
         {
             Ok(ServerCertVerified::assertion())
         } else {
@@ -70,6 +73,38 @@ impl ServerCertVerifier for PinnedServerVerifier {
             ))
         }
     }
+
+    // rustls 0.23 leaves the handshake-signature check to the verifier. It is what proves
+    // the peer HOLDS the pinned certificate's private key, so it must never be stubbed.
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algs)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algs)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.algs.supported_schemes()
+    }
+}
+
+fn provider() -> Arc<CryptoProvider> {
+    Arc::new(ring_provider::default_provider())
+}
+
+fn parse_key(key_der: Vec<u8>) -> Result<PrivateKeyDer<'static>, String> {
+    PrivateKeyDer::try_from(key_der).map_err(|e| format!("unrecognised private key format: {e}"))
 }
 
 /// Builds a `TlsConnector` that presents `(client_cert_der, client_key_der)`
@@ -80,15 +115,19 @@ pub fn build_connector(
     client_key_der: Vec<u8>,
     allowed_server_certs_der: Vec<Vec<u8>>,
 ) -> Result<TlsConnector, String> {
+    let provider = provider();
     let verifier = Arc::new(PinnedServerVerifier {
         allowed_der: allowed_server_certs_der,
+        algs: provider.signature_verification_algorithms,
     });
-    let config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|e| format!("protocol versions: {e}"))?
+        .dangerous()
         .with_custom_certificate_verifier(verifier)
         .with_client_auth_cert(
-            vec![Certificate(client_cert_der)],
-            PrivateKey(client_key_der),
+            vec![CertificateDer::from(client_cert_der)],
+            parse_key(client_key_der)?,
         )
         .map_err(|e| format!("bad client cert/key: {e}"))?;
     Ok(TlsConnector::from(Arc::new(config)))
@@ -99,12 +138,14 @@ pub fn build_connector(
 /// (a real `quorum_node`, or -- as in `quorum_adversarial` -- something
 /// deliberately impersonating one to test how the rest of the system
 /// reacts).
+#[derive(Debug)]
 struct PinnedClientVerifier {
     allowed_der: Vec<Vec<u8>>,
+    algs: WebPkiSupportedAlgorithms,
 }
 
 impl ClientCertVerifier for PinnedClientVerifier {
-    fn client_auth_root_subjects(&self) -> &[DistinguishedName] {
+    fn root_hint_subjects(&self) -> &[DistinguishedName] {
         &[]
     }
     fn offer_client_auth(&self) -> bool {
@@ -115,14 +156,14 @@ impl ClientCertVerifier for PinnedClientVerifier {
     }
     fn verify_client_cert(
         &self,
-        end_entity: &Certificate,
-        _intermediates: &[Certificate],
-        _now: SystemTime,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _now: UnixTime,
     ) -> Result<ClientCertVerified, TlsError> {
         if self
             .allowed_der
             .iter()
-            .any(|c| c.as_slice() == end_entity.0.as_slice())
+            .any(|c| c.as_slice() == end_entity.as_ref())
         {
             Ok(ClientCertVerified::assertion())
         } else {
@@ -130,6 +171,25 @@ impl ClientCertVerifier for PinnedClientVerifier {
                 "client certificate is not in the pinned allow-list".into(),
             ))
         }
+    }
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algs)
+    }
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algs)
+    }
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.algs.supported_schemes()
     }
 }
 
@@ -141,13 +201,16 @@ pub fn build_server_config(
     key_der: Vec<u8>,
     allowed_client_certs_der: Vec<Vec<u8>>,
 ) -> Result<rustls::ServerConfig, String> {
+    let provider = provider();
     let verifier = Arc::new(PinnedClientVerifier {
         allowed_der: allowed_client_certs_der,
+        algs: provider.signature_verification_algorithms,
     });
-    rustls::ServerConfig::builder()
-        .with_safe_defaults()
+    rustls::ServerConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|e| format!("protocol versions: {e}"))?
         .with_client_cert_verifier(verifier)
-        .with_single_cert(vec![Certificate(cert_der)], PrivateKey(key_der))
+        .with_single_cert(vec![CertificateDer::from(cert_der)], parse_key(key_der)?)
         .map_err(|e| format!("bad server cert/key: {e}"))
 }
 
@@ -1005,4 +1068,10 @@ async fn try_propose_once(
     }
 
     Ok(entry)
+}
+
+/// Test support: the server name every pinned connection uses.
+#[doc(hidden)]
+pub fn server_name_for_tests() -> Option<ServerName<'static>> {
+    ServerName::try_from("quorum-node").ok()
 }

@@ -110,13 +110,15 @@ pub fn build_acceptor(
     cert_der: Vec<u8>,
     key_der: Vec<u8>,
 ) -> Result<tokio_rustls::TlsAcceptor, String> {
-    let config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
-        .with_no_client_auth()
-        .with_single_cert(
-            vec![rustls::Certificate(cert_der)],
-            rustls::PrivateKey(key_der),
-        )
-        .map_err(|e| format!("bad TLS server cert/key: {e}"))?;
+    let key = rustls::pki_types::PrivateKeyDer::try_from(key_der)
+        .map_err(|e| format!("unrecognised TLS private key format: {e}"))?;
+    let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .map_err(|e| format!("TLS protocol versions: {e}"))?
+    .with_no_client_auth()
+    .with_single_cert(vec![rustls::pki_types::CertificateDer::from(cert_der)], key)
+    .map_err(|e| format!("bad TLS server cert/key: {e}"))?;
     Ok(tokio_rustls::TlsAcceptor::from(Arc::new(config)))
 }
