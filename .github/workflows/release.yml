@@ -1,18 +1,43 @@
+# Creates a pre-release for every v* tag, with a source archive, an SPDX SBOM
+# (from GitHub's dependency graph), checksums and a signed build-provenance
+# attestation. Run it by hand (workflow_dispatch) to rehearse without
+# publishing. Third-party actions are pinned to full commit SHAs (see ci.yml).
 name: release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Build release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir dist
+          git archive --format=tar.gz --prefix="ciphersettle-${GITHUB_REF_NAME}/" \
+            -o "dist/ciphersettle-${GITHUB_REF_NAME//\//-}-source.tar.gz" HEAD
+          gh api "repos/${GITHUB_REPOSITORY}/dependency-graph/sbom" --jq '.sbom' \
+            > "dist/ciphersettle-${GITHUB_REF_NAME//\//-}.spdx.json"
+          test -s "dist/ciphersettle-${GITHUB_REF_NAME//\//-}.spdx.json"
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          ls -l dist
+      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: dist/*
       - name: Publish pre-release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -20,8 +45,10 @@ jobs:
           Pilot-grade release. Not production-ready: no external audit, no cryptographer
           review of the custom TLS verifiers, and no KMS/HSM integration. Use non-real data only.
           See docs/PRODUCTION_READINESS.md and agent_memory/SECURITY_FINDINGS.md for the open items.
+
+          Verify a download: `gh attestation verify <file> --repo Khafi-Labs/CipherSettle`
           NOTES
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$GITHUB_REF_NAME" dist/* \
             --title "CipherSettle $GITHUB_REF_NAME" \
             --notes-file notes.md \
             --generate-notes \
