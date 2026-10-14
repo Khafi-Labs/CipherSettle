@@ -9,7 +9,7 @@ description = "Verifiable-encryption-style sealing of derived-key material (EC E
 [dependencies]
 blstrs = "0.7"
 group = "0.13"
-ff = "0.13"
+ff = "0.14"
 rand = "0.8"
 sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
