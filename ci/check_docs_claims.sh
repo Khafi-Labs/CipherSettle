@@ -69,7 +69,8 @@ for d in "${DOCS[@]}"; do
 done
 # C8
 grep -oE '\.route\("[^"]+", *(get|post|delete|put)' src/quorum_service/src/main.rs \
-  | sed -E 's/\.route\("([^"]+)", *([a-z]+)/\U\2\E \1/' | sort -u > "${TMPDIR:-/tmp}/routes_code.$$"
+  | sed -E 's/\.route\("([^"]+)", *([a-z]+)/\U\2\E \1/' \
+  | sed -E 's/\{[a-z_]+\}/:id/g' | sort -u > "${TMPDIR:-/tmp}/routes_code.$$"
 grep -ohE '\b(GET|POST|DELETE|PUT) /[A-Za-z0-9_/:.{}-]+' "${DOCS[@]}" 2>/dev/null \
   | sed -E 's/\{[a-z_]+\}/:id/g; s#/:invoice_id#/:id#' | sort -u > "${TMPDIR:-/tmp}/routes_docs.$$"
 while read -r r; do grep -qxF "$r" "${TMPDIR:-/tmp}/routes_docs.$$" || fail "C8 route '$r' is registered in quorum_service but documented nowhere"; done < "${TMPDIR:-/tmp}/routes_code.$$"
