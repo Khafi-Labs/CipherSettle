@@ -34,7 +34,7 @@ jobs:
     name: fmt, clippy, pin policy (pinned toolchain)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the toolchain pinned in rust-toolchain.toml
         run: |
           v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
@@ -43,7 +43,7 @@ jobs:
           rustc --version
       - name: Active compiler must equal the pin (a different rustc proves nothing)
         run: bash ci/assert_toolchain_pinned.sh
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -86,7 +86,7 @@ jobs:
       # A DB test that cannot reach Postgres FAILS instead of skipping.
       CIPHERSETTLE_TEST_DB_REQUIRED: "1"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the toolchain pinned in rust-toolchain.toml
         run: |
           v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
@@ -94,7 +94,7 @@ jobs:
           rustup default "$v"
       - name: Active compiler must equal the pin (a different rustc proves nothing)
         run: bash ci/assert_toolchain_pinned.sh
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -132,7 +132,7 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the toolchain pinned in rust-toolchain.toml
         run: |
           v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
@@ -140,7 +140,7 @@ jobs:
           rustup default "$v"
       - name: Active compiler must equal the pin (a different rustc proves nothing)
         run: bash ci/assert_toolchain_pinned.sh
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -161,7 +161,7 @@ jobs:
         run: |
           cargo run --locked -p quorum_orchestrator | tee orchestrator.log
           grep -q 'Phase 3 exit-criteria demo complete' orchestrator.log
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: adversarial-log
@@ -176,7 +176,7 @@ jobs:
     name: negative test, a broken DB setup must FAIL, not skip
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the toolchain pinned in rust-toolchain.toml
         run: |
           v=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
@@ -184,7 +184,7 @@ jobs:
           rustup default "$v"
       - name: Active compiler must equal the pin (a different rustc proves nothing)
         run: bash ci/assert_toolchain_pinned.sh
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -197,7 +197,7 @@ jobs:
     name: cargo audit + cargo deny
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
@@ -216,7 +216,7 @@ jobs:
       matrix:
         bin: [quorum_node, quorum_service, quorum_notary]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image
         run: docker build --build-arg BIN=${{ matrix.bin }} -t ciphersettle/${{ matrix.bin }}:ci .
       - name: Runs as a non-root user and contains no shell
