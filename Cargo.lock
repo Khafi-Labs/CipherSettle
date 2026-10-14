@@ -207,7 +207,7 @@ version = "0.1.0"
 dependencies = [
  "rand 0.8.8",
  "serde",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "subtle",
 ]
 
@@ -968,7 +968,7 @@ dependencies = [
  "rand 0.8.8",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -1000,7 +1000,7 @@ dependencies = [
  "rand 0.8.8",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -1017,7 +1017,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "tokio",
  "tokio-rustls",
  "zeroize",
@@ -1055,7 +1055,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "tokio",
  "tokio-rustls",
 ]
@@ -1066,7 +1066,7 @@ version = "0.1.0"
 dependencies = [
  "quorum_core",
  "rand 0.8.8",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -1088,7 +1088,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "subtle",
  "tokio",
  "tokio-postgres",
@@ -1108,7 +1108,7 @@ dependencies = [
  "rand 0.8.8",
  "rand_chacha",
  "serde",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
