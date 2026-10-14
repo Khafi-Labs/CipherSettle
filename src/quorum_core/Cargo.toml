@@ -10,7 +10,7 @@ description = "Transport-agnostic threshold BLS DKG + derive protocol state mach
 quorum_audit = { path = "../quorum_audit" }
 quorum_vetseal = { path = "../quorum_vetseal" }
 blstrs = "0.7"
-ff = "0.13"
+ff = "0.14"
 group = "0.13"
 serde = { version = "1", features = ["derive"] }
 rand = "0.8"
