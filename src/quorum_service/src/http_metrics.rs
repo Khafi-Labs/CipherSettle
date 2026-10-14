@@ -168,13 +168,34 @@ impl HttpMetrics {
     }
 }
 
+/// axum 0.8 writes path parameters as `{id}`; the metric label keeps the
+/// `:id` spelling that dashboards and the documentation already use.
+fn stable_route_label(pattern: &str) -> String {
+    let mut out = String::with_capacity(pattern.len());
+    let mut chars = pattern.chars();
+    while let Some(c) = chars.next() {
+        if c == '{' {
+            out.push(':');
+            for inner in chars.by_ref() {
+                if inner == '}' {
+                    break;
+                }
+                out.push(inner);
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// axum middleware: times the request and records it under the matched route
 /// pattern (or `unmatched`).
 pub async fn track(State(m): State<Arc<HttpMetrics>>, req: Request, next: Next) -> Response {
     let route = req
         .extensions()
         .get::<MatchedPath>()
-        .map(|p| p.as_str().to_string())
+        .map(|p| stable_route_label(p.as_str()))
         .unwrap_or_else(|| UNMATCHED.to_string());
     let method = req.method().as_str().to_string();
     let start = Instant::now();
@@ -265,7 +286,7 @@ mod tests {
 
     fn app(m: Arc<HttpMetrics>) -> Router {
         Router::new()
-            .route("/invoices/:id/grant", post(ok))
+            .route("/invoices/{id}/grant", post(ok))
             .route("/boom", get(boom))
             .layer(axum::middleware::from_fn_with_state(m, track))
     }
@@ -308,5 +329,15 @@ mod tests {
         ] {
             assert!(t.contains(want), "missing {want:?} in {t}");
         }
+    }
+
+    #[test]
+    fn route_labels_keep_the_colon_spelling() {
+        assert_eq!(
+            stable_route_label("/invoices/{id}/grant"),
+            "/invoices/:id/grant"
+        );
+        assert_eq!(stable_route_label("/regulators/{id}"), "/regulators/:id");
+        assert_eq!(stable_route_label("/audit-log"), "/audit-log");
     }
 }
