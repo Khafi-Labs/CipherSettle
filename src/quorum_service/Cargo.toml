@@ -13,7 +13,7 @@ quorum_audit = { path = "../quorum_audit" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 quorum_client = { path = "../quorum_client" }
 quorum_vetseal = { path = "../quorum_vetseal" }
-axum = "0.7"
+axum = "0.8"
 # Audit finding A5: TLS termination for the HTTP API. These are axum
 # 0.7's own low-level building blocks (the same ones axum::serve uses
 # internally for the non-TLS case), not a new HTTP stack -- used
