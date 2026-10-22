@@ -5,6 +5,24 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Cryptographic crates move together and need a deliberate, reviewed
+      # upgrade (see the "Coordinated crypto dependency upgrade" issue).
+      # Patch updates and security advisories still arrive as PRs.
+      - dependency-name: "ff"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "group"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "blstrs"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "hmac"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "sha2"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "rand"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "ed25519-dalek"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
@@ -13,6 +31,24 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 2
+    ignore:
+      # Cryptographic crates move together and need a deliberate, reviewed
+      # upgrade (see the "Coordinated crypto dependency upgrade" issue).
+      # Patch updates and security advisories still arrive as PRs.
+      - dependency-name: "ff"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "group"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "blstrs"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "hmac"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "sha2"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "rand"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "ed25519-dalek"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
