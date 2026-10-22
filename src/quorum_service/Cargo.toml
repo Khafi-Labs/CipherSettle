@@ -14,15 +14,16 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 quorum_client = { path = "../quorum_client" }
 quorum_vetseal = { path = "../quorum_vetseal" }
 axum = "0.8"
-# Audit finding A5: TLS termination for the HTTP API. These are axum
-# 0.7's own low-level building blocks (the same ones axum::serve uses
+# Audit finding A5: TLS termination for the HTTP API. These are axum's
+# own low-level building blocks (the same ones axum::serve uses
 # internally for the non-TLS case), not a new HTTP stack -- used
 # directly here, following axum's own documented "low-level rustls"
 # pattern, rather than pulling in axum-server: that crate's latest
 # release (0.6.0) predates, and is API-incompatible with, the
-# hyper-util version this workspace's axum 0.7.9 already resolves to (a
+# hyper-util version this workspace's axum 0.7.9 resolved to at the time (a
 # real crate compatibility gap, hit and confirmed by trying it -- not a
-# toolchain-wall issue). Deliberately HTTP/1.1-only (no "http2" feature
+# toolchain-wall issue). axum was later moved to 0.8; that gap was not
+# re-tested. Deliberately HTTP/1.1-only (no "http2" feature
 # on hyper, no "server-auto" on hyper-util): this service's API doesn't
 # need HTTP/2, and enabling it pulls in h2 -> indexmap 2.3+ ->
 # hashbrown 0.15+ -- avoiding the feature is simpler than adding
