@@ -14,7 +14,7 @@ ff = "0.13"
 group = "0.13"
 serde = { version = "1", features = ["derive"] }
 rand = "0.8"
-base64 = "0.22"
+base64 = "0.23"
 hmac = "0.12"
 sha2 = "0.10"
 
