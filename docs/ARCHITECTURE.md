@@ -126,7 +126,7 @@ Single Tokio async process per node; `Shared` state behind a `tokio::sync::Mutex
 
 ## REST API
 
-`quorum_service`, axum 0.7-based, HTTP/1.1-only by deliberate choice. It exposes a REST subset of the method surface of the project's earlier Internet Computer canister prototype (that crate has since been deleted as superseded dead code; see roadmap finding A14): 9 of its 11 methods are implemented. `get_vetkd_public_key` and `get_encrypted_invoice` are not exposed. `get_merkle_proof` is an addition that did not exist in the earlier design.
+`quorum_service`, axum 0.8-based, HTTP/1.1-only by deliberate choice. It exposes a REST subset of the method surface of the project's earlier Internet Computer canister prototype (that crate has since been deleted as superseded dead code; see roadmap finding A14): 9 of its 11 methods are implemented. `get_vetkd_public_key` and `get_encrypted_invoice` are not exposed. `get_merkle_proof` is an addition that did not exist in the earlier design.
 
 ## Database
 
